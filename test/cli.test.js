@@ -828,3 +828,58 @@ test('growthmap run writes a labelled, costed report for a real site', async () 
     );
   });
 });
+
+test('the landing page is one self-contained file that loads nothing', async () => {
+  const dir = fileURLToPath(new URL('../docs/', import.meta.url));
+  assert.deepEqual((await readdir(dir)).sort(), ['index.html'], 'one file, nothing beside it');
+  const html = await readFile(join(dir, 'index.html'), 'utf8');
+
+  // Everything it needs ships inside it: no script, no stylesheet, no image or
+  // font it has to fetch, so it opens the same from file:// and from the web.
+  assert.match(html, /<style>/, 'its styles are inline');
+  for (const [name, pattern] of [
+    ['script', /<script/i],
+    ['stylesheet link', /<link\b/i],
+    ['src attribute', /\bsrc\s*=/i],
+    ['css import', /@import/i],
+    ['css url()', /url\(/i],
+    ['inline style attribute', /\sstyle\s*=/i],
+  ]) {
+    assert.doesNotMatch(html, pattern, `the page carries no ${name}`);
+  }
+
+  // The only http(s) in the page is inside a link a reader may choose to open.
+  assert.doesNotMatch(
+    html.replace(/<a\b[^>]*>[\s\S]*?<\/a>/g, ''),
+    /https?:/i,
+    'no external resource is referenced',
+  );
+
+  // The example is real, and set as a report rather than as raw Markdown: each
+  // printed field appears in the committed report once its markers are gone.
+  const example = await readFile(new URL('../examples/plausible.io/report.md', import.meta.url), 'utf8');
+  const plain = example.replaceAll('**', '');
+  const card = /<article class="play"[\s\S]*?<\/article>/.exec(html)[0];
+  const printed = [...card.matchAll(/<(?:h3|dd)>([\s\S]*?)<\/(?:h3|dd)>/g)].map((match) => match[1]);
+  printed.push(...[...card.matchAll(/class="chip">([^<]+)</g)].map((match) => match[1]));
+  assert.ok(printed.length >= 6, 'the card prints the title, both fields and the ids it cites');
+  for (const text of printed) {
+    assert.ok(plain.includes(text), `the printed text is in the committed report: ${text.slice(0, 48)}`);
+  }
+  assert.doesNotMatch(card, /###|\*\*|\*Seen:\*/, 'the card shows a report, not marked-up Markdown');
+
+  // The first real command is near the top, not only in the install steps.
+  const command = 'node bin/growthmap.js run example.com --out report';
+  assert.ok(html.indexOf(command) < html.indexOf('id="use"'), 'the first command is printed in the opening');
+
+  // Both labels the rule rests on, and the links the page promises.
+  assert.match(html, /Every claim is <em>Seen<\/em>, with a link, or <i>Inferred<\/i>/);
+  for (const href of [
+    'https://github.com/umeranjum17/growthmap',
+    'https://x.com/umership',
+    'https://web.archive.org/web/20190722082333/https://plausible.io/',
+  ]) {
+    assert.ok(html.includes(`href="${href}"`), `${href} is linked`);
+  }
+  assert.doesNotMatch(html, /\u2014/, 'plain hyphen only, never an em dash');
+});
