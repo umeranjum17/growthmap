@@ -38,6 +38,7 @@ export function makeClaim(record = {}, seenIds = new Set()) {
         reject(id, `evidence ${index + 1} has no fetched_at date`);
       }
       const out = { url: entry.url, quote: entry.quote, fetched_at: entry.fetched_at };
+      if (entry.page_url) out.page_url = entry.page_url;
       if (entry.title) out.title = entry.title;
       if (entry.http_status !== undefined) out.http_status = entry.http_status;
       return out;

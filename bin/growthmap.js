@@ -4,6 +4,8 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fetchSite } from '../src/site.js';
+import { fetchSitemap } from '../src/sitemap.js';
+import { archiveDates } from '../src/archive.js';
 import { buildReport, renderMarkdown } from '../src/report.js';
 
 const USAGE = `growthmap — read an app's public pages, label every claim.
@@ -12,6 +14,7 @@ Usage:
   growthmap run <app-url-or-host> [--out <dir>]
 
 Reads the homepage and /pricing, /about, /features when they answer.
+Dated each page from the public web archive, plus the pages /sitemap.xml advertises.
 Writes report.md, report.json and costs.json into <dir> (default: growthmap-out).`;
 
 function parseArgs(argv) {
@@ -79,12 +82,22 @@ async function main(argv) {
     return 1;
   }
 
+  // The sitemap advertises more pages; dedupe against the pages already read so
+  // no URL is asked for twice. Archive dates are asked last, page URLs first.
+  const sitemap = await fetchSitemap(url.origin);
+  const sitemapCostLines = sitemap.costLines;
+  const siteUrls = pages.filter((page) => page.status === 'ok').map((page) => page.url);
+  const archive = await archiveDates([...new Set([...siteUrls, ...sitemap.urls])]);
+  const archiveCostLines = archive.costLines;
+
   const report = buildReport({
     target: url.href,
     host: url.host,
     version,
     pages,
-    costLines,
+    archive,
+    sitemap: { status: sitemap.status, urls: sitemap.urls.length },
+    costLines: [...costLines, ...sitemapCostLines, ...archiveCostLines],
     started_at,
     finished_at: new Date().toISOString(),
   });

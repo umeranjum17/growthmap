@@ -8,9 +8,9 @@ Every claim carries a label. **Seen** means the run fetched the evidence and the
 
 Every run prints what each data call cost and the total at the end. The base run reads public pages only. No paid key, no account, no subscription.
 
-## Status: slice 1, the site-page reader
+## Status: slice 2, the site-page reader with archive dates
 
-One command runs today. It reads the target app's own public pages and writes a report where every line is either Seen, with a link the run fetched, or Inferred, with the Seen ids it stands on. Archive dates, communities, social, app stores, hiring and the playbook are later slices.
+One command runs today. It reads the target app's own public pages, dates each of them from the public web archive and from the pages `/sitemap.xml` advertises, and writes a report where every line is either Seen, with a link the run fetched, or Inferred, with the Seen ids it stands on. Communities, social, app stores, hiring and the playbook are later slices.
 
 ## Usage
 
@@ -25,7 +25,7 @@ It writes `report.md` (the human report), `report.json` (the same claims as reco
 ## What a report will hold
 
 - **The growth curve.** What moved, by how much, and when.
-- **A dated timeline of the channels.** Page launches, pricing changes, comparison pages, new languages, community posts, store presence, hiring.
+- **A dated timeline.** Every page the site advertises, with the day the public web archive first recorded it and a link you can open to the capture. Community posts, store presence and hiring join it in a later slice.
 - **The positioning.** What the app claims, who it claims it for, and what it charges.
 - **A playbook.** Each play with its effort, its first result, and a ready prompt you can hand to an agent.
 - **The cost table.** Every source call, its price, and the total for the run.
