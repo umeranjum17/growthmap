@@ -855,17 +855,24 @@ test('the landing page is one self-contained file that loads nothing', async () 
     'no external resource is referenced',
   );
 
-  // The quoted output is real: every printed line is in the committed report.
-  const block = /<pre>([\s\S]*?)<\/pre>/.exec(html)[1];
+  // The example is real, and set as a report rather than as raw Markdown: each
+  // printed field appears in the committed report once its markers are gone.
   const example = await readFile(new URL('../examples/plausible.io/report.md', import.meta.url), 'utf8');
-  let from = 0;
-  for (const line of block.split('\n').filter((text) => text.trim())) {
-    const at = example.indexOf(line, from);
-    assert.ok(at >= 0, `the printed line is in the committed report: ${line.slice(0, 48)}`);
-    from = at + line.length;
+  const plain = example.replaceAll('**', '');
+  const card = /<article class="play"[\s\S]*?<\/article>/.exec(html)[0];
+  const printed = [...card.matchAll(/<(?:h3|dd)>([\s\S]*?)<\/(?:h3|dd)>/g)].map((match) => match[1]);
+  printed.push(...[...card.matchAll(/class="chip">([^<]+)</g)].map((match) => match[1]));
+  assert.ok(printed.length >= 6, 'the card prints the title, both fields and the ids it cites');
+  for (const text of printed) {
+    assert.ok(plain.includes(text), `the printed text is in the committed report: ${text.slice(0, 48)}`);
   }
+  assert.doesNotMatch(card, /###|\*\*|\*Seen:\*/, 'the card shows a report, not marked-up Markdown');
 
-  // Both labels the rule rests on, and the links the footer promises.
+  // The first real command is near the top, not only in the install steps.
+  const command = 'node bin/growthmap.js run example.com --out report';
+  assert.ok(html.indexOf(command) < html.indexOf('id="use"'), 'the first command is printed in the opening');
+
+  // Both labels the rule rests on, and the links the page promises.
   assert.match(html, /Every claim is <em>Seen<\/em>, with a link, or <i>Inferred<\/i>/);
   for (const href of [
     'https://github.com/umeranjum17/growthmap',
