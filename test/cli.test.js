@@ -868,6 +868,55 @@ test('the landing page is one self-contained file that loads nothing', async () 
   }
   assert.doesNotMatch(card, /###|\*\*|\*Seen:\*/, 'the card shows a report, not marked-up Markdown');
 
+  // The second example is quoted under the three steps, before the honesty
+  // rule, and every value in the block is a line that run printed: nothing is
+  // rounded, reformatted or invented.
+  const excerpt = /<article class="excerpt"[\s\S]*?<\/article>/.exec(html)[0];
+  assert.ok(
+    html.indexOf('class="excerpt"') > html.indexOf('class="steps"') &&
+      html.indexOf('class="excerpt"') < html.indexOf('id="rule"'),
+    'the excerpt sits under the three steps, before the honesty rule',
+  );
+  const secondDir = fileURLToPath(new URL('../examples/linear.app/', import.meta.url));
+  assert.deepEqual(
+    (await readdir(secondDir)).sort(),
+    ['costs.json', 'report.md'],
+    'the second example is that run report and its cost file, nothing else',
+  );
+  const run = (await readFile(join(secondDir, 'report.md'), 'utf8')).replaceAll('**', '');
+  const shown = excerpt.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  for (const [shownText, runLine] of [
+    ['2019-04-18 Homepage', 'Homepage first seen in the archive on 2019-04-18.'],
+    ['2020-07-01 Pricing page', 'Pricing page first seen in the archive on 2020-07-01.'],
+    ['2025-04-17 Page /agents', 'Page /agents first seen in the archive on 2025-04-17.'],
+    ['"Linear – A fast issue tracker"', 'Hacker News story "Linear – A fast issue tracker"'],
+    ['491 points, 221 comments', '(491 points, 221 comments) dated 2020-06-30.'],
+    ['"Linear Mobile"', 'App Store listing "Linear Mobile"'],
+    ['rated 4.8, 2,303 ratings', 'App Store listing "Linear Mobile" (rated 4.8, 2,303 ratings).'],
+    ['rated 4.6, 1,350 ratings', 'Google Play listing "Linear" (rated 4.6, 1,350 ratings).'],
+    ['19 dated pages', 'Pages were first seen in 17 different months: 19 dated pages, the earliest 2019-04-18'],
+  ]) {
+    assert.ok(shown.includes(shownText), `the excerpt prints ${shownText}`);
+    assert.ok(run.includes(runLine), `the excerpt quotes a line the run printed: ${shownText}`);
+  }
+  for (const href of [
+    'https://web.archive.org/web/20190418214204/https://linear.app/',
+    'https://web.archive.org/web/20200701053740/https://linear.app/pricing',
+    'https://web.archive.org/web/20250417194435/https://linear.app/agents',
+  ]) {
+    assert.ok(run.includes(href) && excerpt.includes(`href="${href}"`), `${href} is the capture that run saw`);
+  }
+  for (const id of ['s5', 's6', 's11', 's24', 's56', 's57', 'i3']) {
+    assert.ok(run.includes(`${id} `), `${id} is a record in that run`);
+    assert.match(excerpt, new RegExp(`>${id}<`), `${id} is cited in the excerpt`);
+  }
+  assert.match(excerpt, /class="parent">s23</, 'the Inferred record names the ids it stands on');
+  const secondCosts = JSON.parse(await readFile(join(secondDir, 'costs.json'), 'utf8'));
+  assert.ok(
+    excerpt.includes(`Total: ${secondCosts.total.toFixed(2)} USD`),
+    'the cost line is the total in the committed cost file',
+  );
+
   // The first real command is near the top, not only in the install steps.
   const command = 'node bin/growthmap.js run example.com --out report';
   assert.ok(html.indexOf(command) < html.indexOf('id="use"'), 'the first command is printed in the opening');

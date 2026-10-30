@@ -50,6 +50,27 @@ h1{font-family:var(--serif);font-weight:600;font-size:clamp(29px,8.4vw,46px);lin
 .steps li{counter-increment:s;display:grid;grid-template-columns:30px 1fr;gap:var(--s1);padding:var(--s2) 0;border-bottom:1px solid var(--line)}
 .steps li::before{content:counter(s);font-family:var(--mono);color:var(--accent);font-weight:700}
 
+/* the product, quoted: one committed run's own records, under the three steps */
+.excerpt{margin-top:var(--s4);border:1px solid var(--line);background:var(--band);padding:var(--s2) var(--s2) var(--s1)}
+.excerpt .label{margin-bottom:var(--s1)}
+.ex-h{font-family:var(--mono);font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin:var(--s2) 0 0}
+.ex-list{list-style:none;margin:var(--s1) 0 0;padding:0;border-top:1px solid var(--line)}
+.ex-list li{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;padding:9px 0 9px var(--s2);border-bottom:1px solid var(--line);border-left:6px solid var(--accent)}
+.ex-list li>*{flex:0 0 auto}
+.ex-move{display:inline-flex;align-items:baseline;gap:10px;min-height:32px;color:var(--ink);text-decoration:none}
+.ex-date{font-family:var(--mono);font-size:14px;color:var(--ink)}
+.ex-move .ex-date{color:var(--accent);text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px}
+.ex-move:hover .ex-date{text-decoration-thickness:2px}
+.ex-what{font-size:16px}
+.ex-tag{display:inline-flex;align-items:center;min-height:24px;padding:0 8px;font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.06em;background:var(--accent);color:var(--accent-ink)}
+.ex-id{font-family:var(--mono);font-size:14px;color:var(--ink-2)}
+.ex-num{font-family:var(--mono);font-size:14px}
+.ex-meta{font-family:var(--mono);font-size:14px;color:var(--ink-2)}
+.excerpt .inf{margin-top:var(--s2);padding:var(--s2) 0 var(--s2) var(--s2)}
+.excerpt .parent{font-size:12px;padding:1px 4px;margin-left:2px}
+.excerpt .inf p{font-size:15px}
+.ex-total{display:flex;align-items:baseline;gap:var(--s2);margin-top:var(--s2);padding-top:var(--s2);border-top:1px solid var(--line);font-family:var(--mono);font-size:14px}
+
 /* the honesty rule: the notation, supporting the proposition */
 #rule{background:var(--band);border-top:1px solid var(--accent);padding:clamp(36px,8vw,56px) 0}
 #rule h2{color:var(--accent)}
@@ -131,6 +152,53 @@ footer span{color:var(--ink-2)}
       <li><span>It reads the app's own pages, their archive dates, and where the app is discussed, filmed, stored and hired.</span></li>
       <li><span>It comes back with the channels, the dated moves, the positioning, and plays that must cite what it saw.</span></li>
     </ol>
+
+    <article class="excerpt" aria-label="Excerpt from the committed linear.app run">
+      <p class="label">What one run printed: linear.app, run 2026-10-30</p>
+
+      <p class="ex-h">Dated moves</p>
+      <ul class="ex-list">
+        <li>
+          <a class="ex-move" href="https://web.archive.org/web/20190418214204/https://linear.app/"><span class="ex-date">2019-04-18</span><span class="ex-what">Homepage</span></a>
+          <span class="ex-id">s5</span><span class="ex-tag">SEEN</span>
+        </li>
+        <li>
+          <a class="ex-move" href="https://web.archive.org/web/20200701053740/https://linear.app/pricing"><span class="ex-date">2020-07-01</span><span class="ex-what">Pricing page</span></a>
+          <span class="ex-id">s6</span><span class="ex-tag">SEEN</span>
+        </li>
+        <li>
+          <a class="ex-move" href="https://web.archive.org/web/20250417194435/https://linear.app/agents"><span class="ex-date">2025-04-17</span><span class="ex-what">Page /agents</span></a>
+          <span class="ex-id">s11</span><span class="ex-tag">SEEN</span>
+        </li>
+      </ul>
+
+      <p class="ex-h">Reach</p>
+      <ul class="ex-list">
+        <li>
+          <span class="ex-meta">Hacker News</span><span class="ex-id">s24</span><span class="ex-tag">SEEN</span>
+          <span class="ex-what">"Linear – A fast issue tracker"</span>
+          <span class="ex-num">491 points, 221 comments</span><span class="ex-meta">dated 2020-06-30</span>
+        </li>
+        <li>
+          <span class="ex-meta">App Store</span><span class="ex-id">s56</span><span class="ex-tag">SEEN</span>
+          <span class="ex-what">"Linear Mobile"</span>
+          <span class="ex-num">rated 4.8, 2,303 ratings</span>
+        </li>
+        <li>
+          <span class="ex-meta">Google Play</span><span class="ex-id">s57</span><span class="ex-tag">SEEN</span>
+          <span class="ex-what">"Linear"</span>
+          <span class="ex-num">rated 4.6, 1,350 ratings</span>
+        </li>
+      </ul>
+
+      <div class="rec inf">
+        <span class="lab">INFERRED</span><span class="id">i3</span>
+        <p>Pages were first seen in 17 different months: 19 dated pages, the earliest 2019-04-18, the most recent 2026-08-17, with 2 first seen in 2023-10.</p>
+        <p class="src">from: <span class="parent">s5</span> <span class="parent">s6</span> <span class="parent">s7</span> <span class="parent">s8</span> <span class="parent">s9</span> <span class="parent">s10</span> <span class="parent">s11</span> <span class="parent">s12</span> <span class="parent">s13</span> <span class="parent">s14</span> <span class="parent">s15</span> <span class="parent">s16</span> <span class="parent">s17</span> <span class="parent">s18</span> <span class="parent">s19</span> <span class="parent">s20</span> <span class="parent">s21</span> <span class="parent">s22</span> <span class="parent">s23</span></p>
+      </div>
+
+      <p class="ex-total"><span class="ex-h">Cost</span><span>Total: 0.00 USD</span></p>
+    </article>
   </div>
 </header>
 
