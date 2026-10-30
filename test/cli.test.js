@@ -4,13 +4,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { createServer } from 'node:http';
-import { mkdtemp, readdir, readFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { makeClaim } from '../src/claim.js';
 import { hnUrl, redditUrl } from '../src/reach.js';
+import { acceptPlays, playbookPrompt, withPlaybook } from '../src/playbook.js';
 
 const run = promisify(execFile);
 const CLI = fileURLToPath(new URL('../bin/growthmap.js', import.meta.url));
@@ -733,5 +734,97 @@ test('growthmap run writes a labelled, costed report for a real site', async () 
     );
     assert.match(markdown3, /The reach search asked us to slow down after 1 call/);
     assert.ok(report3.run.reach.stopped, 'the run records that a search rate-limited it');
+
+    // --- the playbook: the brief out, the checked answer back in ---
+
+    const cli = (args) => run(process.execPath, [CLI, ...args]);
+    const briefPath = join(out, 'playbook-prompt.md');
+    const { stdout: briefOut } = await cli(['playbook', out]);
+    const brief = await readFile(briefPath, 'utf8');
+    assert.match(briefOut, /wrote .*playbook-prompt\.md/, 'the command says what it wrote');
+
+    // The brief names the app, the run date, and every Seen record with its id,
+    // its claim, its url and its quote: the agent works from this and nothing else.
+    assert.ok(brief.includes(report.run.host), 'the brief names the app');
+    assert.ok(brief.includes(report.run.finished_at.slice(0, 10)), 'the brief names the run date');
+    const seenClaims = report.claims.filter((claim) => claim.label === 'seen');
+    for (const claim of seenClaims) {
+      assert.ok(brief.includes(`### ${claim.id}`), `the brief lists Seen ${claim.id}`);
+      assert.ok(brief.includes(claim.claim.replace(/\s+/g, ' ')), `the brief carries the claim text of ${claim.id}`);
+      for (const entry of claim.evidence) {
+        assert.ok(brief.includes(entry.url), `the brief carries the url of ${claim.id}`);
+        assert.ok(brief.includes(entry.quote.replace(/\s+/g, ' ').trim()), `the brief carries the quote of ${claim.id}`);
+      }
+    }
+    assert.ok(brief.includes('plays.json'), 'the brief names the file to write');
+    assert.ok(brief.includes('"cites"'), 'the brief states the shape to return');
+    assert.match(brief, /Every play must cite at least one Seen id from this run/, 'the brief states the rule');
+    assert.ok(!brief.includes('s999'), 'the brief holds no id the run never saw');
+
+    // Deterministic: asking again over the same report yields the same bytes.
+    await cli(['playbook', out]);
+    assert.equal(await readFile(briefPath, 'utf8'), brief, 'the same report produces the same brief');
+    assert.equal(playbookPrompt(report), brief, 'the brief is a function of the report alone');
+
+    // A valid answer is accepted and written into report.md as the last section.
+    const seenList = [...seenIds];
+    const playsFile = join(out, 'plays.json');
+    const plays = {
+      plays: [
+        {
+          title: 'Ship a comparison page against the incumbent',
+          effort: 'One writer for a day',
+          first_result: 'One page live on our own host',
+          prompt: 'Write the /vs- page for our main competitor.',
+          cites: [seenList[0], seenList[1]],
+        },
+      ],
+    };
+    await writeFile(playsFile, JSON.stringify(plays, null, 2), 'utf8');
+    const { stdout: accepted } = await cli(['playbook', out, '--accept', playsFile]);
+    assert.match(accepted, /accepted 1 play/, 'the command says it took the plays');
+    const withPlays = await readFile(join(out, 'report.md'), 'utf8');
+    assert.ok(withPlays.startsWith(markdown.trimEnd()), 'the report itself is kept, the playbook is added after it');
+    assert.equal(withPlays.trimEnd().split('\n## Playbook').length, 2, 'one Playbook section, at the end');
+    assert.match(withPlays, /## Playbook[\s\S]*### 1\. Ship a comparison page against the incumbent/);
+    assert.ok(withPlays.includes('**Effort:** One writer for a day'), 'the play shows its effort');
+    assert.ok(withPlays.includes('**First result:** One page live on our own host'), 'the play shows its first result');
+    assert.ok(withPlays.includes('Write the /vs- page for our main competitor.'), 'the play shows its prompt');
+    assert.ok(withPlays.includes(`*Seen:* ${seenList[0]}, ${seenList[1]}`), 'the play shows the Seen ids it rests on');
+    assert.equal(withPlaybook(withPlays, acceptPlays(JSON.stringify(plays), seenIds).plays), withPlays, 'accepting twice changes nothing');
+
+    // A refusal writes nothing and says why. Each one exits 2.
+    const refuse = async (name, body, message) => {
+      const file = join(out, `${name}.json`);
+      await writeFile(file, body, 'utf8');
+      const before = await readFile(join(out, 'report.md'), 'utf8');
+      await assert.rejects(cli(['playbook', out, '--accept', file]), (error) => {
+        assert.equal(error.code, 2, `${name} is refused with exit code 2`);
+        assert.match(error.stderr, message);
+        return true;
+      });
+      assert.equal(await readFile(join(out, 'report.md'), 'utf8'), before, `report.md is unchanged by the ${name} refusal`);
+    };
+    const play = (over) => JSON.stringify({ plays: [{ ...plays.plays[0], ...over }] });
+    await refuse('unknown-id', play({ cites: [seenList[0], 's999'] }), /cites "s999", which is not a Seen record in this report/);
+    await refuse('no-citation', play({ cites: [] }), /cites no Seen id/);
+    await refuse('no-effort', play({ effort: undefined }), /has no effort/);
+    await refuse('no-title', play({ title: '   ' }), /has no title/);
+    await refuse('not-json', 'these are not the plays you are looking for', /not valid JSON/);
+    await refuse('no-plays', '{"plays":[]}', /holds no plays/);
+
+    // The committed example is the same check applied to a real run: if it ever
+    // stops being accepted, the example or the check is wrong.
+    const exampleDir = new URL('../examples/plausible.io/', import.meta.url);
+    const example = JSON.parse(await readFile(new URL('report.json', exampleDir), 'utf8'));
+    const exampleSeen = new Set(example.claims.filter((claim) => claim.label === 'seen').map((claim) => claim.id));
+    const exampleAnswer = acceptPlays(await readFile(new URL('plays.json', exampleDir), 'utf8'), exampleSeen);
+    assert.ok(exampleAnswer.plays?.length > 0, `the committed example passes the acceptance check: ${exampleAnswer.error}`);
+    assert.equal(playbookPrompt(example), await readFile(new URL('playbook-prompt.md', exampleDir), 'utf8'), 'the committed brief is what this report produces');
+    assert.equal(
+      withPlaybook(await readFile(new URL('report.md', exampleDir), 'utf8'), exampleAnswer.plays),
+      await readFile(new URL('report.md', exampleDir), 'utf8'),
+      'the committed report already holds exactly those plays',
+    );
   });
 });
