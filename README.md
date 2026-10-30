@@ -8,9 +8,19 @@ Every claim carries a label. **Seen** means the run fetched the evidence and the
 
 Every run prints what each data call cost and the total at the end. The base run reads public pages only. No paid key, no account, no subscription.
 
-## Status: early, pre-release
+## Status: slice 1, the site-page reader
 
-The command line interface is being designed. There is no install step yet. Read everything below as the shape of the tool, not as a promise that it runs today.
+One command runs today. It reads the target app's own public pages and writes a report where every line is either Seen, with a link the run fetched, or Inferred, with the Seen ids it stands on. Archive dates, communities, social, app stores, hiring and the playbook are later slices.
+
+## Usage
+
+Run it straight from the repository with Node 20 or newer, no install step:
+
+```sh
+node bin/growthmap.js run example.com --out report
+```
+
+It writes `report.md` (the human report), `report.json` (the same claims as records, plus the run metadata) and `costs.json` (every call and the total) into the directory.
 
 ## What a report will hold
 
