@@ -37,6 +37,15 @@ const FIXTURES = {
       <url><loc>http://FIXTURE_ORIGIN/limited-page</loc></url>
       <url><loc>http://FIXTURE_ORIGIN/after-limit</loc></url>
     </urlset>`,
+  // The careers page: two real roles, plus a nav link and an "Apply now" button
+  // that are not roles and must never become claims.
+  '/careers': `<!doctype html><html><head><title>Careers at Acme</title></head><body>
+    <nav><a href="/careers">Careers</a><a href="/about">About</a></nav>
+    <h1>Open roles</h1>
+    <div><a href="/careers/1f2e-product-engineer"><span>Product Engineer</span></a></div>
+    <div><a href="/careers/9a8b-brand-designer"><span>Brand Designer</span></a></div>
+    <a href="/careers/apply">Apply now</a>
+    </body></html>`,
 };
 
 // The archive stub: the captures each URL has. A URL with no entry (or an empty
@@ -124,13 +133,131 @@ const redditFeed = (entries) => `<?xml version="1.0" encoding="UTF-8"?><feed xml
     .join('')}
 </feed>`;
 
+// The video stub: the results page's own embedded data. Two videos are about
+// the app (one states an exact count, one states none at all, so the count is
+// absent from its record); the third only matched a word and must be dropped.
+const YOUTUBE_VIDEOS = [
+  {
+    videoId: 'vid00000001',
+    title: { runs: [{ text: 'Acme in five minutes' }] },
+    longBylineText: { runs: [{ text: 'Acme' }] },
+    viewCountText: { simpleText: '206,412 views' },
+  },
+  {
+    videoId: 'vid00000002',
+    title: { runs: [{ text: 'Acme setup walkthrough' }] },
+    longBylineText: { runs: [{ text: 'Dev Notes' }] },
+  },
+  {
+    videoId: 'vid00000004',
+    title: { runs: [{ text: 'Acme launch keynote' }] },
+    longBylineText: { runs: [{ text: 'Acme' }] },
+    // A rounded figure stays the page's own words; it is never expanded.
+    viewCountText: { simpleText: '1.2M views' },
+  },
+  {
+    videoId: 'vid00000003',
+    title: { runs: [{ text: 'Shipping Rust to production' }] },
+    longBylineText: { runs: [{ text: 'Systems Weekly' }] },
+    viewCountText: { simpleText: '9,001 views' },
+  },
+];
+
+const youtubePage = (videos) => `<html><body><script>var ytInitialData = ${JSON.stringify({
+  contents: {
+    twoColumnSearchResultsRenderer: {
+      primaryContents: {
+        sectionListRenderer: {
+          contents: [{ itemSectionRenderer: { contents: videos.map((video) => ({ videoRenderer: video })) } }],
+        },
+      },
+    },
+  },
+})};</script></body></html>`;
+
+// The iTunes stub: one listing whose own seller site is the app's host, and one
+// same-named app whose seller site is somebody else, which must be dropped.
+const ITUNES_RESULTS = [
+  {
+    trackName: 'Acme – ship faster',
+    trackViewUrl: 'https://apps.apple.com/us/app/acme/id123?uo=4',
+    averageUserRating: 4.83022,
+    userRatingCount: 2303,
+    sellerUrl: 'http://FIXTURE_ORIGIN/',
+  },
+  {
+    trackName: 'Acme Ring Light',
+    trackViewUrl: 'https://apps.apple.com/us/app/acme-ring/id456?uo=4',
+    averageUserRating: 3.1,
+    userRatingCount: 88,
+    sellerUrl: 'https://other.example/',
+  },
+];
+
+// The Play stub: a search page with two cards that both name the app, then a
+// details page per listing. The first card's listing belongs to another company
+// (its schema.org author site is elsewhere) and must not become a claim.
+const PLAY_SEARCH = `<html><body>
+  <div><a href="/store/apps/details?id=com.acme.ringlight" aria-label="Acme Ring Light"></a></div>
+  <div><a href="/store/apps/details?id=com.acme.app" aria-label="Acme"></a></div>
+</body></html>`;
+
+const PLAY_LISTINGS = {
+  'com.acme.ringlight': {
+    '@type': 'SoftwareApplication',
+    name: 'Acme Ring Light',
+    author: { '@type': 'Person', name: 'Other Co', url: 'https://other.example/' },
+    aggregateRating: { '@type': 'AggregateRating', ratingValue: '3.1', ratingCount: '88' },
+  },
+  'com.acme.app': {
+    '@type': 'SoftwareApplication',
+    name: 'Acme',
+    author: { '@type': 'Person', name: 'Acme Inc', url: 'http://FIXTURE_ORIGIN' },
+    aggregateRating: { '@type': 'AggregateRating', ratingValue: '4.554455280303955', ratingCount: '1350' },
+  },
+};
+
+const playDetailsPage = (listing) => `<html><body><script type="application/ld+json">${JSON.stringify(listing)}</script></body></html>`;
+
 async function withFixtureSite(fn) {
   const archivePath = '/stub-cdx';
   const hnPath = '/stub-hn';
   const redditPath = '/stub-reddit';
+  const youtubePath = '/stub-youtube';
+  const itunesPath = '/stub-itunes';
+  const playSearchPath = '/stub-play-search';
+  const playDetailsPath = '/stub-play-details';
   let mode = 'first';
   const server = createServer((request, response) => {
     const target = new URL(request.url, 'http://127.0.0.1');
+    const fixtureOrigin = `127.0.0.1:${server.address().port}`;
+    if (target.pathname === youtubePath) {
+      response.writeHead(200, { 'content-type': 'text/html' });
+      response.end(youtubePage(mode === 'first' ? [] : YOUTUBE_VIDEOS));
+      return;
+    }
+    if (target.pathname === itunesPath) {
+      const results = mode === 'first' ? [] : ITUNES_RESULTS;
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ resultCount: results.length, results }).replaceAll('FIXTURE_ORIGIN', fixtureOrigin));
+      return;
+    }
+    if (target.pathname === playSearchPath) {
+      response.writeHead(200, { 'content-type': 'text/html' });
+      response.end(mode === 'first' ? '<html><body>No results found</body></html>' : PLAY_SEARCH);
+      return;
+    }
+    if (target.pathname === playDetailsPath) {
+      const listing = PLAY_LISTINGS[target.searchParams.get('id')];
+      if (!listing) {
+        response.writeHead(404, { 'content-type': 'text/html' });
+        response.end('<title>Not found</title>');
+        return;
+      }
+      response.writeHead(200, { 'content-type': 'text/html' });
+      response.end(playDetailsPage(listing).replaceAll('FIXTURE_ORIGIN', fixtureOrigin));
+      return;
+    }
     if (target.pathname === hnPath) {
       if (mode === 'third') {
         response.writeHead(429, { 'content-type': 'text/plain' });
@@ -176,7 +303,12 @@ async function withFixtureSite(fn) {
       return;
     }
     const origin = `http://127.0.0.1:${server.address().port}`;
-    const page = FIXTURES[request.url]?.replaceAll('FIXTURE_ORIGIN', `127.0.0.1:${server.address().port}`);
+    // Run one has no careers page at all: the app's host answers 404 for both
+    // the usual paths, which the run records as failed calls, not as claims.
+    const page =
+      target.pathname === '/careers' && mode === 'first'
+        ? undefined
+        : FIXTURES[request.url]?.replaceAll('FIXTURE_ORIGIN', `127.0.0.1:${server.address().port}`);
     if (!page) {
       response.writeHead(404, { 'content-type': 'text/html' });
       response.end('<title>Not found</title><p>Not found</p>');
@@ -196,6 +328,10 @@ async function withFixtureSite(fn) {
       },
       hnEndpoint: `${origin}${hnPath}`,
       redditEndpoint: `${origin}${redditPath}`,
+      youtubeEndpoint: `${origin}${youtubePath}`,
+      itunesEndpoint: `${origin}${itunesPath}`,
+      playEndpoint: `${origin}${playSearchPath}`,
+      playDetailsEndpoint: `${origin}${playDetailsPath}`,
     });
   } finally {
     await new Promise((resolve) => server.close(resolve));
@@ -211,6 +347,10 @@ test('growthmap run writes a labelled, costed report for a real site', async () 
           GROWTHMAP_ARCHIVE_URL: archiveEndpoint,
           GROWTHMAP_HN_URL: stub.hnEndpoint,
           GROWTHMAP_REDDIT_URL: stub.redditEndpoint,
+          GROWTHMAP_YOUTUBE_URL: stub.youtubeEndpoint,
+          GROWTHMAP_ITUNES_URL: stub.itunesEndpoint,
+          GROWTHMAP_PLAY_URL: stub.playEndpoint,
+          GROWTHMAP_PLAY_DETAILS_URL: stub.playDetailsEndpoint,
         },
       });
     const out = await mkdtemp(join(tmpdir(), 'growthmap-test-'));
@@ -401,6 +541,37 @@ test('growthmap run writes a labelled, costed report for a real site', async () 
       'with nothing to count there is no reach claim',
     );
 
+    // --- the new sources, run one: every one of them answers with nothing ---
+
+    for (const source of ['youtube', 'appstore', 'playstore']) {
+      const own = report.run.reach.sources.find((entry) => entry.source === source);
+      assert.ok(own, `${source} is named in the run metadata`);
+      assert.equal(own.status, 'ok', `${source} answered, it just found nothing`);
+      assert.equal(own.items, 0, `${source} found nothing`);
+      assert.ok(
+        costs.lines.every((line) => line.source !== source || line.cost === 0),
+        `${source} is metered at free`,
+      );
+    }
+    // An empty answer is a claim-free answer, never a zero printed as a fact.
+    assert.ok(
+      !report.claims.some((claim) => /^(YouTube video|App Store listing|Google Play listing|Hiring role)/.test(claim.claim)),
+      'a run where the new sources found nothing makes no claim for them',
+    );
+    assert.match(markdown, /### YouTube[\s\S]*found nothing for this query, no claim made\./);
+    assert.match(markdown, /### App Store[\s\S]*found nothing for this query, no claim made\./);
+
+    // No careers page answers: two failed, metered calls and no claim at all.
+    const hiringSource = report.run.reach.sources.find((entry) => entry.source === 'hiring');
+    assert.equal(hiringSource.status, 'failed', 'the run says the careers page did not answer');
+    assert.equal(hiringSource.items, 0);
+    assert.equal(
+      costs.lines.filter((line) => line.source === 'hiring' && line.status === 'failed').length,
+      2,
+      'both usual careers paths were tried and both are metered as failed',
+    );
+    assert.match(markdown, /### Hiring[\s\S]*did not answer \(failed\), no claim made\./);
+
     // --- reach, second run: both sources answer ---
 
     stub.setMode('second');
@@ -444,12 +615,83 @@ test('growthmap run writes a labelled, costed report for a real site', async () 
     );
     assert.match(markdown2, /### Reddit/, 'the reach section groups by source');
 
+    // --- the new sources, run two: video, both stores, and the roles ---
+
+    const videoClaims = report2.claims.filter((claim) => claim.claim.startsWith('YouTube video'));
+    assert.equal(videoClaims.length, 3, 'the videos about the app become Seen claims');
+    assert.match(videoClaims[0].claim, /"Acme in five minutes" by Acme \(206,412 views\)/, "the exact count is the page's own");
+    assert.match(videoClaims[0].evidence[0].url, /^https:\/\/www\.youtube\.com\/watch\?v=vid00000001$/, 'the watch link is recorded');
+    assert.match(videoClaims[0].evidence[0].fetched_at, /^\d{4}-\d{2}-\d{2}$/, 'the date it was read is recorded');
+    const unstated = report2.run.reach.items.find((item) => item.title === 'Acme setup walkthrough');
+    assert.ok(unstated, 'the video with no count is still recorded');
+    assert.equal(unstated.views, undefined, 'a count the page never stated is absent, not zero');
+    assert.equal(unstated.views_text, undefined);
+    assert.equal(videoClaims[1].claim, 'YouTube video "Acme setup walkthrough" by Dev Notes.', 'no count is printed for a video that states none');
+    assert.equal(videoClaims[2].claim, 'YouTube video "Acme launch keynote" by Acme (1.2M views).', "a rounded count is kept as the page's own words");
+    const rounded = report2.run.reach.items.find((item) => item.title === 'Acme launch keynote');
+    assert.equal(rounded.views, undefined, 'a rounded figure is never expanded into a precise count');
+    assert.equal(rounded.views_text, '1.2M views');
+    assert.ok(
+      !report2.claims.some((claim) => claim.claim.includes('Shipping Rust')),
+      'a video that only matched a word is dropped, no claim',
+    );
+
+    const storeClaims = report2.claims.filter((claim) => claim.claim.startsWith('App Store listing'));
+    assert.equal(storeClaims.length, 1, "the listing whose seller site is the app's host is the app");
+    assert.equal(
+      storeClaims[0].claim,
+      'App Store listing "Acme – ship faster" (rated 4.8, 2,303 ratings).',
+      "the rating and its count are the answer's own",
+    );
+    assert.match(storeClaims[0].evidence[0].url, /^https:\/\/apps\.apple\.com\/us\/app\/acme\//, 'the listing url is recorded');
+    assert.ok(
+      !report2.claims.some((claim) => claim.claim.includes('Ring Light')),
+      'a same-named app from another company never becomes a claim',
+    );
+
+    const playClaims = report2.claims.filter((claim) => claim.claim.startsWith('Google Play listing'));
+    assert.equal(playClaims.length, 1);
+    assert.equal(
+      playClaims[0].claim,
+      'Google Play listing "Acme" (rated 4.6, 1,350 ratings).',
+      'the schema.org listing states an exact rating count',
+    );
+    assert.match(playClaims[0].evidence[0].url, /\/stub-play-details\?id=com\.acme\.app/, 'the listing page read is recorded');
+    assert.equal(
+      report2.run.reach.calls.filter((call) => call.source === 'playstore' && call.status === 'ok').length,
+      3,
+      'the search and both named listings are read, in order',
+    );
+
+    const roleClaims = report2.claims.filter((claim) => claim.claim.startsWith('Hiring role'));
+    assert.deepEqual(
+      roleClaims.map((claim) => claim.claim),
+      [
+        'Hiring role "Product Engineer" is open on the app\'s careers page.',
+        'Hiring role "Brand Designer" is open on the app\'s careers page.',
+      ],
+      'the roles the careers page advertises, and nothing else',
+    );
+    for (const claim of roleClaims) {
+      assert.equal(claim.evidence[0].url, `${origin}/careers`, "the page read is the app's own careers page");
+      assert.match(claim.evidence[0].fetched_at, /^\d{4}-\d{2}-\d{2}$/, 'the date it was read is recorded');
+    }
+    assert.match(markdown2, /### YouTube/);
+    assert.match(markdown2, /### App Store/);
+    assert.match(markdown2, /### Google Play/);
+    assert.match(markdown2, /### Hiring/);
+
     const reach2 = report2.claims.find((claim) => claim.claim.startsWith('Reach:'));
     for (const ref of reach2.inferred_from) assert.ok(seenIds2.has(ref), `reach claim cites ${ref}, which exists`);
     assert.equal(
       reach2.claim,
-      'Reach: 5 items across 2 channels, the busiest Hacker News with 3, the earliest dated 2024-07-05.',
-      'two channels, the busiest counted, the earliest item named',
+      'Reach: 12 items across 6 channels, the busiest Hacker News with 3, the earliest dated 2024-07-05.',
+      'every channel is counted, the busiest one named, the earliest item named',
+    );
+    assert.equal(
+      reach2.inferred_from.length,
+      report2.run.reach.items.length,
+      'the reach count cites every item it counts',
     );
     const sum2 = costs2.lines.reduce((total, line) => total + line.cost, 0);
     assert.equal(costs2.total, Number(sum2.toFixed(2)), 'the total is still the sum of the lines');
@@ -464,12 +706,15 @@ test('growthmap run writes a labelled, costed report for a real site', async () 
     const costs3 = JSON.parse(await readFile(join(out3, 'costs.json'), 'utf8'));
     const markdown3 = await readFile(join(out3, 'report.md'), 'utf8');
 
-    assert.ok(report3.run.reach.stopped, 'the run records that a search rate-limited it');
-    assert.equal(report3.run.reach.attempts, 1, 'nothing is retried after the refusal');
     assert.deepEqual(
-      report3.run.reach.calls.map((call) => call.status),
+      report3.run.reach.calls.filter((call) => ['hackernews', 'reddit'].includes(call.source)).map((call) => call.status),
       ['rate_limited', 'skipped'],
       'the call after the refusal is skipped, not made',
+    );
+    assert.equal(
+      report3.run.reach.calls.filter((call) => call.source === 'hackernews').length,
+      1,
+      'the refused search is not retried',
     );
     assert.ok(
       costs3.lines.some((line) => line.source === 'hackernews' && line.status === 'failed'),
@@ -487,5 +732,6 @@ test('growthmap run writes a labelled, costed report for a real site', async () 
       'a run with no answers makes no reach claim',
     );
     assert.match(markdown3, /The reach search asked us to slow down after 1 call/);
+    assert.ok(report3.run.reach.stopped, 'the run records that a search rate-limited it');
   });
 });

@@ -15,7 +15,14 @@ const REDDIT_RESULTS = 10;
 // A deliberate gap between community calls: these endpoints rate-limit a burst.
 const GAP_MS = 400;
 
-export const REACH_LABEL = { hackernews: 'Hacker News', reddit: 'Reddit' };
+export const REACH_LABEL = {
+  hackernews: 'Hacker News',
+  reddit: 'Reddit',
+  youtube: 'YouTube',
+  appstore: 'App Store',
+  playstore: 'Google Play',
+  hiring: 'Hiring',
+};
 
 /** 1725148800 -> 2024-09-01 */
 const dayOf = (seconds) =>
