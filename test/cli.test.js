@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { makeClaim } from '../src/claim.js';
+import { hnUrl, redditUrl } from '../src/reach.js';
 
 const run = promisify(execFile);
 const CLI = fileURLToPath(new URL('../bin/growthmap.js', import.meta.url));
@@ -54,9 +55,9 @@ const ARCHIVE = {
 };
 
 // The reach stubs: the community searches the run makes, same local server.
-// The first run has a Reddit search that fails and a host query that finds
-// nothing; the second has both answering, and the host query repeating a story
-// the name query already returned, so the dedupe is exercised too.
+// Run one has a Hacker News search that finds nothing and a Reddit search that
+// fails; run two has both answering, including one hit that matched the word
+// but not the app, which must be dropped; run three rate-limits the first call.
 const HN_STORIES = [
   {
     objectID: '40001',
@@ -64,7 +65,7 @@ const HN_STORIES = [
     points: 128,
     num_comments: 43,
     created_at: '2024-09-01T10:00:00.000Z',
-    url: 'https://acme.example/blog/launch',
+    url: 'http://FIXTURE_ORIGIN/blog/launch',
   },
   {
     objectID: '40002',
@@ -72,15 +73,56 @@ const HN_STORIES = [
     points: 12,
     num_comments: 5,
     created_at: '2024-08-15T09:30:00.000Z',
-    url: 'https://acme.example/blog/deploys',
+    url: 'http://FIXTURE_ORIGIN/blog/deploys',
+  },
+  {
+    // Links elsewhere, but names the app's address in the title.
+    objectID: '40003',
+    title: 'Show HN: Acme CLI – my 127.0.0.1 deploy helper',
+    points: 55,
+    num_comments: 15,
+    created_at: '2024-07-05T12:00:00.000Z',
+    url: 'https://github.com/someone/acme-tui',
+  },
+  {
+    // Matched the word, not the app: a maths textbook. Must never become a claim.
+    objectID: '40004',
+    title: 'Linear Algebra Done Right – 4th Edition',
+    points: 631,
+    num_comments: 294,
+    created_at: '2023-10-29T09:00:00.000Z',
+    url: 'https://linear.axler.net',
   },
 ];
 
-const REDDIT_POSTS = [
-  { title: 'Acme just killed our deploy script', subreddit: 'SideProject', score: 210, num_comments: 34, created_utc: 1717200000, permalink: '/r/SideProject/comments/abc/acme/' },
-  { title: 'Anyone moved off Acme?', subreddit: 'devops', score: 7, num_comments: 9, created_utc: 1719792000, permalink: '/r/devops/comments/def/acme/' },
-  { title: 'Acme vs the alternative', subreddit: 'webdev', score: 41, num_comments: 3, created_utc: 1722470400, permalink: '/r/webdev/comments/ghi/acme/' },
+// The Reddit stub answers with an Atom feed, the shape the RSS search returns.
+// Two entries are about the app (one in a subreddit named after it, one whose
+// title names its address); two merely share a word and must be dropped.
+const REDDIT_ENTRIES = [
+  // No category tag, the way the feed lists a community: the link names it.
+  { title: 'Acme users', author: '/u/dave', date: '2024-08-25', url: 'https://www.reddit.com/r/Acme/' },
+  { title: 'Acme CLI – my 127.0.0.1 deploy helper', subreddit: 'devops', author: '/u/erin', date: '2024-07-15', url: 'https://www.reddit.com/r/devops/comments/ghi/acme/' },
+  { title: 'Acme just killed our deploy script', subreddit: 'SideProject', author: '/u/alice', date: '2024-06-01', url: 'https://www.reddit.com/r/SideProject/comments/abc/acme/' },
+  { title: 'URX Core75 SE Launch + Giveaway', subreddit: 'mkindia', author: '/u/frank', date: '2024-09-10', url: 'https://www.reddit.com/r/mkindia/comments/jkl/urx/' },
 ];
+
+const redditFeed = (entries) => `<?xml version="1.0" encoding="UTF-8"?><feed xmlns="http://www.w3.org/2005/Atom">
+  <category term="reddit.com" label="r/reddit.com"/>
+  <updated>2026-10-30T19:33:16+00:00</updated>
+  <title>reddit.com: search results - acme</title>
+  ${entries
+    .map(
+      (entry) => `<entry>
+    <author><name>${entry.author}</name></author>
+    ${entry.subreddit ? `<category term="${entry.subreddit}" label="r/${entry.subreddit}"/>` : ''}
+    <content type="html">&lt;div&gt;a post about Acme&lt;/div&gt;</content>
+    <link href="${entry.url}"/>
+    <updated>${entry.date}T10:00:00+00:00</updated>
+    <title>${entry.title}</title>
+  </entry>`,
+    )
+    .join('')}
+</feed>`;
 
 async function withFixtureSite(fn) {
   const archivePath = '/stub-cdx';
@@ -90,17 +132,14 @@ async function withFixtureSite(fn) {
   const server = createServer((request, response) => {
     const target = new URL(request.url, 'http://127.0.0.1');
     if (target.pathname === hnPath) {
-      const query = target.searchParams.get('query') ?? '';
-      // A query with a dot is the host query: it finds nothing first time round.
-      const host = query.includes('.');
-      if (mode === 'third' && !host) {
+      if (mode === 'third') {
         response.writeHead(429, { 'content-type': 'text/plain' });
         response.end('slow down');
         return;
       }
-      const hits = host ? (mode === 'first' ? [] : [HN_STORIES[0]]) : HN_STORIES;
+      const hits = mode === 'first' ? [] : HN_STORIES;
       response.writeHead(200, { 'content-type': 'application/json' });
-      response.end(JSON.stringify({ hits }));
+      response.end(JSON.stringify({ hits }).replaceAll('FIXTURE_ORIGIN', `127.0.0.1:${server.address().port}`));
       return;
     }
     if (target.pathname === redditPath) {
@@ -109,9 +148,8 @@ async function withFixtureSite(fn) {
         response.end('reddit is having a bad day');
         return;
       }
-      const children = REDDIT_POSTS.map((data) => ({ kind: 't3', data }));
-      response.writeHead(200, { 'content-type': 'application/json' });
-      response.end(JSON.stringify({ data: { children } }));
+      response.writeHead(200, { 'content-type': 'application/atom+xml' });
+      response.end(redditFeed(REDDIT_ENTRIES));
       return;
     }
     if (target.pathname === archivePath) {
@@ -325,22 +363,23 @@ test('growthmap run writes a labelled, costed report for a real site', async () 
     // --- reach: the community searches ---
 
     assert.match(markdown, /## Reach/, 'the report gains a reach section');
-    const hnClaims = report.claims.filter((claim) => claim.claim.startsWith('Hacker News post'));
-    assert.equal(hnClaims.length, 2, 'each story the search returned is one Seen claim');
-    for (const claim of hnClaims) {
-      const [entry] = claim.evidence;
-      assert.match(entry.url, /^https:\/\/news\.ycombinator\.com\/item\?id=\d+$/, 'the discussion link is recorded');
-      assert.match(entry.page_url, /^https:\/\/acme\.example\//, "the story's own link is recorded too");
-      assert.match(entry.quote, /"points":\d+/, 'the quote is what the API returned');
-      assert.match(entry.fetched_at, /^\d{4}-\d{2}-\d{2}$/, 'every item carries the date it was fetched');
-    }
-    assert.match(hnClaims[0].claim, /128 points, 43 comments/, 'the counts are the API\'s own');
-    assert.match(hnClaims[0].claim, /dated 2024-09-01/);
 
-    // A query that found nothing produces no claim and is recorded as such.
-    const emptyCall = report.run.reach.calls.find((call) => call.call.includes('query=127.0.0.1'));
-    assert.equal(emptyCall.status, 'ok', 'the search answered, it just had no results');
-    assert.equal(emptyCall.items, 0, 'the run metadata says it found nothing');
+    // The endpoints themselves: the address search, and the Atom search that
+    // still answers where Reddit's JSON search refuses a plain client.
+    assert.match(hnUrl('acme.test'), /^https:\/\/hn\.algolia\.com\/api\/v1\/search\?.*restrictSearchableAttributes=url/);
+    assert.match(redditUrl('acme.test'), /^https:\/\/www\.reddit\.com\/search\.rss\?q=acme\.test&limit=10$/);
+
+    // Run one: the Hacker News search is asked for the app's own address, with
+    // the loose text match off, and it finds nothing about the app.
+    const hnCall = report.run.reach.calls.find((call) => call.source === 'hackernews');
+    assert.match(hnCall.call, /restrictSearchableAttributes=url/, 'the search is constrained to the address');
+    assert.equal(hnCall.status, 'ok', 'the search answered, it just had no results about the app');
+    assert.equal(hnCall.items, 0, 'the run metadata says it found nothing');
+    assert.equal(
+      report.run.reach.calls.filter((call) => call.source === 'hackernews').length,
+      1,
+      'one request per resource',
+    );
 
     // A source that fails is a failed, metered call and never a claim.
     const redditSource = report.run.reach.sources.find((source) => source.source === 'reddit');
@@ -350,50 +389,66 @@ test('growthmap run writes a labelled, costed report for a real site', async () 
       costs.lines.some((line) => line.source === 'reddit' && line.status === 'failed'),
       'the failing search is in the cost meter',
     );
-    assert.ok(!report.claims.some((claim) => claim.claim.startsWith('Reddit post')), 'a failure makes no claim');
     assert.match(markdown, /### Reddit[\s\S]*did not answer \(failed\), no claim made\./);
 
-    const reachClaim = report.claims.find((claim) => claim.label === 'inferred' && claim.claim.startsWith('Reach:'));
-    assert.ok(reachClaim, 'the items found are read as a reach claim');
-    for (const ref of reachClaim.inferred_from) {
-      assert.ok(seenIds.has(ref), `reach claim cites ${ref}, which is a Seen claim`);
-    }
-    assert.equal(reachClaim.inferred_from.length, hnClaims.length, 'it cites every item it counts');
-    assert.equal(
-      reachClaim.claim,
-      'Reach: 2 items across 1 channel, the busiest Hacker News with 2, the earliest dated 2024-08-15.',
-      'exact counts, the busiest channel, the earliest dated item',
+    // Nothing found means no reach claim at all, Seen or Inferred.
+    assert.ok(
+      !report.claims.some((claim) => /^(Hacker News story|Reddit result)/.test(claim.claim)),
+      'a run that found nothing makes no reach claim',
     );
-    for (const item of report.run.reach.items) {
-      assert.ok(markdown.includes(item.date) && markdown.includes(item.url), `${item.title} is printed with its date and link`);
-    }
+    assert.ok(
+      !report.claims.some((claim) => claim.claim.startsWith('Reach:')),
+      'with nothing to count there is no reach claim',
+    );
 
-    // --- reach, second run: both sources answer, and a repeated story is one claim ---
+    // --- reach, second run: both sources answer ---
 
     stub.setMode('second');
     const out2 = await mkdtemp(join(tmpdir(), 'growthmap-test-'));
     await runReport(out2);
     const report2 = JSON.parse(await readFile(join(out2, 'report.json'), 'utf8'));
     const costs2 = JSON.parse(await readFile(join(out2, 'costs.json'), 'utf8'));
+    const markdown2 = await readFile(join(out2, 'report.md'), 'utf8');
     const seenIds2 = new Set(report2.claims.filter((claim) => claim.label === 'seen').map((claim) => claim.id));
 
-    assert.equal(
-      report2.claims.filter((claim) => claim.claim.startsWith('Hacker News post')).length,
-      2,
-      'a story both queries returned is one claim, not two',
+    const hnClaims = report2.claims.filter((claim) => claim.claim.startsWith('Hacker News story'));
+    assert.equal(hnClaims.length, 3, 'three hits are about the app, each one Seen claim');
+    assert.ok(
+      !report2.claims.some((claim) => claim.claim.includes('Linear Algebra Done Right')),
+      'a hit that matched the word but not the app is dropped, no claim',
     );
-    const redditClaims = report2.claims.filter((claim) => claim.claim.startsWith('Reddit post'));
-    assert.equal(redditClaims.length, 3);
-    assert.match(redditClaims[0].claim, /in r\/SideProject/, 'the subreddit is named');
-    assert.match(redditClaims[0].claim, /210 points, 34 comments/, 'the score is the API\'s own');
-    assert.match(redditClaims[0].claim, /dated 2024-06-01/);
+    assert.ok(
+      report2.claims.some((claim) => claim.claim.includes('Acme CLI')),
+      'a hit whose title names the app is kept even when it links elsewhere',
+    );
+    for (const claim of hnClaims) {
+      const [entry] = claim.evidence;
+      assert.match(entry.url, /^https:\/\/news\.ycombinator\.com\/item\?id=\d+$/, 'the discussion link is recorded');
+      assert.match(entry.quote, /"points":\d+/, 'the quote is what the API returned');
+      assert.match(entry.fetched_at, /^\d{4}-\d{2}-\d{2}$/, 'every item carries the date it was fetched');
+    }
+    assert.match(hnClaims[0].claim, /128 points, 43 comments/, "the counts are the answer's own");
+    assert.match(hnClaims[0].claim, /dated 2024-09-01/);
+
+    const redditClaims = report2.claims.filter((claim) => claim.claim.startsWith('Reddit result'));
+    assert.equal(redditClaims.length, 2, 'the entries about the app become Seen claims');
+    assert.match(redditClaims[0].claim, /in r\/Acme/, 'the subreddit is named, from the link when the feed gives no category');
+    assert.match(redditClaims[0].claim, /by \/u\/dave/, 'the author is named');
+    assert.match(redditClaims[0].claim, /dated 2024-08-25/);
+    assert.doesNotMatch(redditClaims[0].claim, /points|comments|score/, 'the feed states no score, so none is claimed');
     assert.match(redditClaims[0].evidence[0].url, /^https:\/\/www\.reddit\.com\/r\//, 'the permalink is recorded');
+    assert.match(redditClaims[1].claim, /in r\/devops/, 'the entry category names the subreddit when it has one');
+    assert.ok(
+      !report2.claims.some((claim) => /URX|killed our deploy script/.test(claim.claim)),
+      'a Reddit result that only shares a word is dropped, no claim',
+    );
+    assert.match(markdown2, /### Reddit/, 'the reach section groups by source');
 
     const reach2 = report2.claims.find((claim) => claim.claim.startsWith('Reach:'));
     for (const ref of reach2.inferred_from) assert.ok(seenIds2.has(ref), `reach claim cites ${ref}, which exists`);
     assert.equal(
       reach2.claim,
-      'Reach: 5 items across 2 channels, the busiest Reddit with 3, the earliest dated 2024-06-01.',
+      'Reach: 5 items across 2 channels, the busiest Hacker News with 3, the earliest dated 2024-07-05.',
       'two channels, the busiest counted, the earliest item named',
     );
     const sum2 = costs2.lines.reduce((total, line) => total + line.cost, 0);
@@ -413,8 +468,8 @@ test('growthmap run writes a labelled, costed report for a real site', async () 
     assert.equal(report3.run.reach.attempts, 1, 'nothing is retried after the refusal');
     assert.deepEqual(
       report3.run.reach.calls.map((call) => call.status),
-      ['rate_limited', 'skipped', 'skipped'],
-      'the calls after the refusal are skipped, not made',
+      ['rate_limited', 'skipped'],
+      'the call after the refusal is skipped, not made',
     );
     assert.ok(
       costs3.lines.some((line) => line.source === 'hackernews' && line.status === 'failed'),
@@ -424,11 +479,11 @@ test('growthmap run writes a labelled, costed report for a real site', async () 
       costs3.lines.filter(
         (line) => line.status === 'skipped' && line.reason && ['hackernews', 'reddit'].includes(line.source),
       ).length,
-      2,
-      'the skipped reach calls still carry their reason in the meter',
+      1,
+      'the skipped reach call still carries its reason in the meter',
     );
     assert.ok(
-      !report3.claims.some((claim) => /^(Hacker News|Reddit) post/.test(claim.claim)),
+      !report3.claims.some((claim) => /^(Hacker News story|Reddit result)/.test(claim.claim)),
       'a run with no answers makes no reach claim',
     );
     assert.match(markdown3, /The reach search asked us to slow down after 1 call/);

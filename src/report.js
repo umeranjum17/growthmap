@@ -112,14 +112,16 @@ function timelineClaim(timeline, id, seenIds) {
   );
 }
 
-/** One Seen claim per community item: the counts and date the API returned. */
+/** One Seen claim per community item: the counts and date the answer gave. */
 function reachItemClaim(item, id) {
   const label = REACH_LABEL[item.source] ?? item.source;
+  const noun = item.source === 'hackernews' ? 'story' : 'result';
   const where = item.subreddit ? ` in r/${item.subreddit}` : '';
   const counts = [];
   if (item.points !== undefined) counts.push(`${item.points} points`);
   if (item.comments !== undefined) counts.push(`${item.comments} comments`);
   const said = counts.length ? ` (${counts.join(', ')})` : '';
+  const by = item.author ? ` by ${item.author}` : '';
   const dated = item.date ? ` dated ${item.date}` : '';
   const evidence = { url: item.url, quote: item.quote, fetched_at: item.fetched_at };
   // The HN discussion page is where the counts live; the story link is the item itself.
@@ -129,7 +131,7 @@ function reachItemClaim(item, id) {
   }
   return makeClaim({
     id,
-    claim: `${label} post ${quoted(item.title)}${where}${said}${dated}.`,
+    claim: `${label} ${noun} ${quoted(item.title)}${where}${said}${by}${dated}.`,
     label: SEEN,
     evidence: [evidence],
   });

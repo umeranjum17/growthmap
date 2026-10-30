@@ -16,7 +16,7 @@ Usage:
 
 Reads the homepage and /pricing, /about, /features when they answer.
 Dated each page from the public web archive, plus the pages /sitemap.xml advertises.
-Searches Hacker News and Reddit for the app name and its host.
+Searches Hacker News and Reddit for the app's own address.
 Writes report.md, report.json and costs.json into <dir> (default: growthmap-out).`;
 
 function parseArgs(argv) {
@@ -92,13 +92,18 @@ async function main(argv) {
   const archive = await archiveDates([...new Set([...siteUrls, ...sitemap.urls])]);
   const archiveCostLines = archive.costLines;
 
-  // Reach: the app as other people wrote it down. The name is the host without
-  // its www and its domain, which is what a person would type into a search.
-  const appName = url.hostname.replace(/^www\./i, '').split('.')[0] || url.hostname;
+  // Reach: the app as other people wrote it down. The search is the app's own
+  // address, because a brand word alone matches whatever shares the word. The
+  // brand token is the host's own label, or the site's own title when the host
+  // has no name of its own (a bare IP).
+  const appHost = url.hostname.replace(/^www\./i, '');
+  const hostLabel = appHost.split('.')[0];
+  const brand = /^[a-z]{3,}$/i.test(hostLabel)
+    ? hostLabel
+    : ((home.title ?? '').split(/[\s\u2013\u2014:|\u00b7-]+/).filter(Boolean)[0] || hostLabel);
   const reach = await fetchReach([
-    { source: 'hackernews', url: hnUrl(appName) },
-    { source: 'hackernews', url: hnUrl(url.hostname) },
-    { source: 'reddit', url: redditUrl(appName) },
+    { source: 'hackernews', url: hnUrl(appHost), host: appHost, brand },
+    { source: 'reddit', url: redditUrl(appHost), host: appHost, brand },
   ]);
 
   const report = buildReport({
