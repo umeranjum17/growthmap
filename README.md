@@ -8,9 +8,9 @@ Every claim carries a label. **Seen** means the run fetched the evidence and the
 
 Every run prints what each data call cost and the total at the end. The base run reads public pages only. No paid key, no account, no subscription.
 
-## Status: slice 3, reach from Hacker News, Reddit, YouTube, the stores and hiring
+## Status: slice 4a, the playbook and one real example run
 
-One command runs today. It reads the target app's own public pages, dates each of them from the public web archive and from the pages `/sitemap.xml` advertises, searches Hacker News, Reddit and YouTube for the app, reads its App Store and Google Play listings and the careers page on its own host, and writes a report where every line is either Seen, with a link the run fetched, or Inferred, with the Seen ids it stands on. The playbook and the landing page are later slices.
+Two commands run today. `growthmap run` reads the target app's own public pages, dates each of them from the public web archive and from the pages `/sitemap.xml` advertises, searches Hacker News, Reddit and YouTube for the app, reads its App Store and Google Play listings and the careers page on its own host, and writes a report where every line is either Seen, with a link the run fetched, or Inferred, with the Seen ids it stands on. `growthmap playbook` hands that report to your own agent and takes the plays back, refusing any play that cites evidence the run never saw. The landing page is slice 4b.
 
 ## Usage
 
@@ -22,13 +22,24 @@ node bin/growthmap.js run example.com --out report
 
 It writes `report.md` (the human report), `report.json` (the same claims as records, plus the run metadata) and `costs.json` (every call and the total) into the directory.
 
+## The playbook: your agent writes it, the tool checks it
+
+```sh
+node bin/growthmap.js playbook report                          # writes report/playbook-prompt.md
+node bin/growthmap.js playbook report --accept plays.json
+```
+
+The first command writes the brief: the app, the run date, every Seen record with its id, its claim, its url and its quote, the exact JSON shape to return, and the rule that every play must cite a Seen id from this run. Hand it to your own agent, which writes `plays.json`. The second command checks the answer and writes it into `report.md` as a `## Playbook` section; it refuses, and writes nothing, when a play cites an id this run never saw, cites none at all, or is missing its title, its effort, its first result or its prompt. No model call and no key are inside the tool.
+
+`examples/plausible.io/` is one complete real run against Plausible Analytics, with the brief and the plays written from it.
+
 ## What a report will hold
 
 - **The growth curve.** What moved, by how much, and when.
 - **A dated timeline.** Every page the site advertises, with the day the public web archive first recorded it and a link you can open to the capture.
 - **Reach.** Where the app is talked about away from its own site: Hacker News stories, Reddit posts, YouTube videos, the App Store and Google Play listings, and the roles open on its careers page, each with a link, the counts the source itself states, and the date the run read it, plus one Inferred line counting the channels found.
 - **The positioning.** What the app claims, who it claims it for, and what it charges.
-- **A playbook.** Each play with its effort, its first result, and a ready prompt you can hand to an agent.
+- **A playbook.** Each play with its effort, its first result, a ready prompt you can hand to an agent, and the Seen ids it rests on.
 - **The cost table.** Every source call, its price, and the total for the run.
 
 ## Two rules that never bend

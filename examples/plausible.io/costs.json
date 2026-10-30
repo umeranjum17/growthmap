@@ -1,0 +1,331 @@
+{
+  "lines": [
+    {
+      "source": "site",
+      "call": "GET https://plausible.io/",
+      "cost": 0
+    },
+    {
+      "source": "site",
+      "call": "GET https://plausible.io/pricing",
+      "cost": 0
+    },
+    {
+      "source": "site",
+      "call": "GET https://plausible.io/about",
+      "cost": 0
+    },
+    {
+      "source": "site",
+      "call": "GET https://plausible.io/features",
+      "cost": 0
+    },
+    {
+      "source": "sitemap",
+      "call": "GET https://plausible.io/sitemap.xml",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2F&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fabout&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Ffeatures&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fad-cost-calculator&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fgoogle-analytics-script-size&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fvs-cloudflare-web-analytics&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fcompliance&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fconversion-rate-calculator&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fcookie-banner-traffic-loss-calculator&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fcookieless-web-analytics&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fdata-policy&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Feu-hosted-web-analytics&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fgoogle-search-console&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fvs-google-analytics&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fprivacy-friendly-web-analytics&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fwhite-label-web-analytics&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fgtm-template&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Flightweight-web-analytics&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fmigrate-from-google-analytics&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fopen-source-website-analytics&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Flooker-studio-connector&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fwordpress-analytics-plugin&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fprivacy-focused-web-analytics&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fself-hosted-web-analytics&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fmost-accurate-web-analytics&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fplausible-umami-fathom-simple-analytics&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Ffor-public-sector&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fprocurement&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Freal-time-web-analytics&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fenterprise-web-analytics&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Ffor-ecommerce&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Ffor-saas&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fsimple-web-analytics&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Ftools&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Ftrack-ai-traffic&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Futm-builder&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Futm-checker&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fvs-matomo&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Ffor-bloggers-creators&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Ffor-freelancers-agencies&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Faudience-segmentation&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "archive",
+      "call": "GET https://web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fplausible.io%2Fwhen-not-to-use-plausible&matchType=exact&output=json&fl=timestamp%2Cstatuscode%2Coriginal&filter=statuscode%3A200&limit=100",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "hackernews",
+      "call": "GET https://hn.algolia.com/api/v1/search?query=plausible.io&tags=story&restrictSearchableAttributes=url&hitsPerPage=20",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "reddit",
+      "call": "GET https://www.reddit.com/search.rss?q=plausible.io&limit=10",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "youtube",
+      "call": "GET https://www.youtube.com/results?search_query=plausible&hl=en&gl=US",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "appstore",
+      "call": "GET https://itunes.apple.com/search?term=plausible&entity=software&limit=25",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "playstore",
+      "call": "GET https://play.google.com/store/search?q=plausible&c=apps&hl=en&gl=US",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "playstore",
+      "call": "GET https://play.google.com/store/apps/details?id=com.bigvaria.applausible&hl=en&gl=US",
+      "cost": 0,
+      "status": "ok"
+    },
+    {
+      "source": "hiring",
+      "call": "GET https://plausible.io/careers",
+      "cost": 0,
+      "status": "failed"
+    },
+    {
+      "source": "hiring",
+      "call": "GET https://plausible.io/jobs",
+      "cost": 0,
+      "status": "failed"
+    }
+  ],
+  "total": 0
+}

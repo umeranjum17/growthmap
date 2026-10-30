@@ -1,0 +1,32 @@
+{
+  "plays": [
+    {
+      "title": "Open-source the core and sell the hosted version",
+      "effort": "A few weeks of one engineer to split what ships into a free self-hosted edition and a paid hosted one, plus a licence choice someone can defend in public.",
+      "first_result": "A self-hosted install page a stranger can follow to a running instance, and a hosted signup page on the same site.",
+      "prompt": "Split what we ship into two editions: a free one our users can run themselves, and our paid hosted one. Write the install page for the self-hosted edition: one path, no options we do not test. Write the licence note that says plainly what is free and what is paid. Then draft the launch post saying why we open-sourced it, in plain words and with no adjectives about how excited we are.",
+      "cites": ["s2", "s27", "s51"]
+    },
+    {
+      "title": "Own the comparison page against the incumbent",
+      "effort": "One writer for a day per competitor page, five pages to start, then half a day a quarter each to keep the facts current.",
+      "first_result": "Five /vs- pages live on your own host, linked from the pricing page, and a search for the incumbent's name plus 'alternative' that returns one of them.",
+      "prompt": "Write five comparison pages at /vs-<competitor>, one per tool a buyer might already be using. For each: who it fits, who we fit, an honest row-by-row table on the things people switch for, and one line saying when the competitor is the better pick. Use no benchmark we cannot cite or measure ourselves. Add the pages to the pricing page under a 'compare' heading.",
+      "cites": ["s17", "s40", "s9"]
+    },
+    {
+      "title": "Publish the numbers and let the write-up travel",
+      "effort": "Two days per post for the person holding the numbers, then one launch a month at most so the next one is still worth reading.",
+      "first_result": "One post that opens with a real revenue, usage or conversion figure from your own books, submitted the week it is published, and a discussion that runs to dozens of comments.",
+      "prompt": "Write a post from our own numbers: a launch, a revenue figure, a conversion change, or a technical decision we reversed. Open with the number. Then the four decisions that produced it, each with the date we made it. Say what it cost, including what failed. No advice we have not lived. Then write the submission title and the first comment that answers 'what is this and why now'.",
+      "cites": ["s46", "s48", "s55"]
+    },
+    {
+      "title": "Ship free calculators that price the incumbent's cost",
+      "effort": "One afternoon per calculator for an engineer and a page each, so three calculators is about a week.",
+      "first_result": "Three calculators on your own host, each taking one input and returning one number, linked from the footer, and each already captured by the web archive.",
+      "prompt": "Build three single-purpose calculators on our own site. Each one shows what the incumbent costs the visitor: the script weight they load, the ad money spent on traffic it miscounts, and the visits lost to its cookie banner. One input, one number out, no email wall before the result. Write the copy so the number is the headline. Link them from the footer and give each its own page title.",
+      "cites": ["s7", "s8", "s12"]
+    }
+  ]
+}

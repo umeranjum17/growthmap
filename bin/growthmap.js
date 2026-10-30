@@ -9,21 +9,52 @@ import { archiveDates } from '../src/archive.js';
 import { fetchReach, hnUrl, redditUrl } from '../src/reach.js';
 import { fetchExtraSources } from '../src/sources.js';
 import { buildReport, renderMarkdown } from '../src/report.js';
+import { acceptPlays, playbookPrompt, seenRecords, withPlaybook } from '../src/playbook.js';
 
 const USAGE = `growthmap — read an app's public pages, label every claim.
 
 Usage:
   growthmap run <app-url-or-host> [--out <dir>]
+  growthmap playbook <report-dir> [--accept <plays.json>]
 
 Reads the homepage and /pricing, /about, /features when they answer.
 Dated each page from the public web archive, plus the pages /sitemap.xml advertises.
 Searches Hacker News and Reddit for the app's own address, YouTube for its name,
 and reads the App Store and Google Play listings and the app's own careers page.
-Writes report.md, report.json and costs.json into <dir> (default: growthmap-out).`;
+Writes report.md, report.json and costs.json into <dir> (default: growthmap-out).
+
+playbook writes playbook-prompt.md for your own agent to answer as plays.json;
+--accept checks that answer against the run's Seen records and writes it into
+report.md. A play that cites evidence this run never saw is refused.`;
+
+function parsePlaybookArgs(rest) {
+  let dir;
+  let accept;
+  for (let i = 0; i < rest.length; i += 1) {
+    const arg = rest[i];
+    if (arg === '--accept') {
+      accept = rest[i + 1];
+      i += 1;
+      if (!accept) return { error: '--accept needs a plays file' };
+    } else if (arg.startsWith('--accept=')) {
+      accept = arg.slice('--accept='.length);
+      if (!accept) return { error: '--accept needs a plays file' };
+    } else if (arg.startsWith('-')) {
+      return { error: `unknown option: ${arg}` };
+    } else if (dir === undefined) {
+      dir = arg;
+    } else {
+      return { error: `unexpected argument: ${arg}` };
+    }
+  }
+  if (!dir) return { error: 'missing <report-dir>' };
+  return { command: 'playbook', dir, accept };
+}
 
 function parseArgs(argv) {
   const [command, ...rest] = argv;
   if (!command || ['--help', '-h', 'help'].includes(command)) return { help: true };
+  if (command === 'playbook') return parsePlaybookArgs(rest);
   if (command !== 'run') return { error: `unknown command: ${command}` };
 
   let target;
@@ -46,7 +77,74 @@ function parseArgs(argv) {
     }
   }
   if (!target) return { error: 'missing <app-url-or-host>' };
-  return { target, out };
+  return { command: 'run', target, out };
+}
+
+async function readJson(path, what) {
+  let text;
+  try {
+    text = await readFile(path, 'utf8');
+  } catch {
+    throw new Error(`could not read ${path}; ${what}`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error(`${path} is not valid JSON (${error.message})`);
+  }
+}
+
+/** The playbook half: write the brief, or check the answer and take it back. */
+async function playbookCommand(args) {
+  const reportJson = join(args.dir, 'report.json');
+  let report;
+  try {
+    report = await readJson(reportJson, 'run growthmap run first, it writes one');
+  } catch (error) {
+    console.error(`growthmap: ${error.message}`);
+    return 2;
+  }
+
+  if (!args.accept) {
+    const seen = seenRecords(report);
+    if (seen.length === 0) {
+      console.error(`growthmap: ${reportJson} holds no Seen records, so there is no playbook to brief for.`);
+      return 2;
+    }
+    const path = join(args.dir, 'playbook-prompt.md');
+    await writeFile(path, playbookPrompt(report), 'utf8');
+    console.log(`wrote ${path} (${seen.length} Seen records to work from)`);
+    console.log(`hand it to your agent, then: growthmap playbook ${args.dir} --accept plays.json`);
+    return 0;
+  }
+
+  const reportMd = join(args.dir, 'report.md');
+  let markdown;
+  try {
+    markdown = await readFile(reportMd, 'utf8');
+  } catch {
+    console.error(`growthmap: could not read ${reportMd}; the plays have nowhere to go, nothing written.`);
+    return 2;
+  }
+
+  let playsText;
+  try {
+    playsText = await readFile(args.accept, 'utf8');
+  } catch {
+    console.error(`growthmap: could not read ${args.accept}; nothing written.`);
+    return 2;
+  }
+
+  const seenIds = new Set(seenRecords(report).map((claim) => claim.id));
+  const answer = acceptPlays(playsText, seenIds);
+  if (answer.error) {
+    console.error(`growthmap: ${args.accept} refused: ${answer.error}. Nothing written to ${reportMd}.`);
+    return 2;
+  }
+
+  await writeFile(reportMd, withPlaybook(markdown, answer.plays), 'utf8');
+  console.log(`accepted ${answer.plays.length} play(s) into ${reportMd}`);
+  return 0;
 }
 
 function toUrl(target) {
@@ -69,6 +167,8 @@ async function main(argv) {
     console.error(`growthmap: ${args.error}\n\n${USAGE}`);
     return 2;
   }
+
+  if (args.command === 'playbook') return playbookCommand(args);
 
   const url = toUrl(args.target);
   if (!url) {
