@@ -53,10 +53,67 @@ const ARCHIVE = {
   '/blog/post': [['20250301000000', '200', '/blog/post']],
 };
 
+// The reach stubs: the community searches the run makes, same local server.
+// The first run has a Reddit search that fails and a host query that finds
+// nothing; the second has both answering, and the host query repeating a story
+// the name query already returned, so the dedupe is exercised too.
+const HN_STORIES = [
+  {
+    objectID: '40001',
+    title: 'Show HN: Acme ships your app faster',
+    points: 128,
+    num_comments: 43,
+    created_at: '2024-09-01T10:00:00.000Z',
+    url: 'https://acme.example/blog/launch',
+  },
+  {
+    objectID: '40002',
+    title: 'Ask HN: does anyone still hand-roll deploys?',
+    points: 12,
+    num_comments: 5,
+    created_at: '2024-08-15T09:30:00.000Z',
+    url: 'https://acme.example/blog/deploys',
+  },
+];
+
+const REDDIT_POSTS = [
+  { title: 'Acme just killed our deploy script', subreddit: 'SideProject', score: 210, num_comments: 34, created_utc: 1717200000, permalink: '/r/SideProject/comments/abc/acme/' },
+  { title: 'Anyone moved off Acme?', subreddit: 'devops', score: 7, num_comments: 9, created_utc: 1719792000, permalink: '/r/devops/comments/def/acme/' },
+  { title: 'Acme vs the alternative', subreddit: 'webdev', score: 41, num_comments: 3, created_utc: 1722470400, permalink: '/r/webdev/comments/ghi/acme/' },
+];
+
 async function withFixtureSite(fn) {
   const archivePath = '/stub-cdx';
+  const hnPath = '/stub-hn';
+  const redditPath = '/stub-reddit';
+  let mode = 'first';
   const server = createServer((request, response) => {
     const target = new URL(request.url, 'http://127.0.0.1');
+    if (target.pathname === hnPath) {
+      const query = target.searchParams.get('query') ?? '';
+      // A query with a dot is the host query: it finds nothing first time round.
+      const host = query.includes('.');
+      if (mode === 'third' && !host) {
+        response.writeHead(429, { 'content-type': 'text/plain' });
+        response.end('slow down');
+        return;
+      }
+      const hits = host ? (mode === 'first' ? [] : [HN_STORIES[0]]) : HN_STORIES;
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ hits }));
+      return;
+    }
+    if (target.pathname === redditPath) {
+      if (mode === 'first') {
+        response.writeHead(500, { 'content-type': 'text/plain' });
+        response.end('reddit is having a bad day');
+        return;
+      }
+      const children = REDDIT_POSTS.map((data) => ({ kind: 't3', data }));
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ data: { children } }));
+      return;
+    }
     if (target.pathname === archivePath) {
       const asked = target.searchParams.get('url') ?? '';
       let pathname = '';
@@ -95,18 +152,31 @@ async function withFixtureSite(fn) {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
   try {
-    return await fn(origin, `${origin}${archivePath}`);
+    return await fn(origin, `${origin}${archivePath}`, {
+      setMode: (next) => {
+        mode = next;
+      },
+      hnEndpoint: `${origin}${hnPath}`,
+      redditEndpoint: `${origin}${redditPath}`,
+    });
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
 }
 
 test('growthmap run writes a labelled, costed report for a real site', async () => {
-  await withFixtureSite(async (origin, archiveEndpoint) => {
+  await withFixtureSite(async (origin, archiveEndpoint, stub) => {
+    const runReport = async (dir) =>
+      run(process.execPath, [CLI, 'run', origin, '--out', dir], {
+        env: {
+          ...process.env,
+          GROWTHMAP_ARCHIVE_URL: archiveEndpoint,
+          GROWTHMAP_HN_URL: stub.hnEndpoint,
+          GROWTHMAP_REDDIT_URL: stub.redditEndpoint,
+        },
+      });
     const out = await mkdtemp(join(tmpdir(), 'growthmap-test-'));
-    const { stdout } = await run(process.execPath, [CLI, 'run', origin, '--out', out], {
-      env: { ...process.env, GROWTHMAP_ARCHIVE_URL: archiveEndpoint },
-    });
+    const { stdout } = await runReport(out);
 
     assert.match(stdout, /total\s+0\.00 USD/, 'the run prints its total');
 
@@ -251,5 +321,116 @@ test('growthmap run writes a labelled, costed report for a real site', async () 
       assert.ok(markdown.includes(claim.id), `${claim.id} is printed in report.md`);
     }
     assert.ok(report.run.pages.some((page) => page.status === 'not_found'), 'the 404 is recorded, not claimed');
+
+    // --- reach: the community searches ---
+
+    assert.match(markdown, /## Reach/, 'the report gains a reach section');
+    const hnClaims = report.claims.filter((claim) => claim.claim.startsWith('Hacker News post'));
+    assert.equal(hnClaims.length, 2, 'each story the search returned is one Seen claim');
+    for (const claim of hnClaims) {
+      const [entry] = claim.evidence;
+      assert.match(entry.url, /^https:\/\/news\.ycombinator\.com\/item\?id=\d+$/, 'the discussion link is recorded');
+      assert.match(entry.page_url, /^https:\/\/acme\.example\//, "the story's own link is recorded too");
+      assert.match(entry.quote, /"points":\d+/, 'the quote is what the API returned');
+      assert.match(entry.fetched_at, /^\d{4}-\d{2}-\d{2}$/, 'every item carries the date it was fetched');
+    }
+    assert.match(hnClaims[0].claim, /128 points, 43 comments/, 'the counts are the API\'s own');
+    assert.match(hnClaims[0].claim, /dated 2024-09-01/);
+
+    // A query that found nothing produces no claim and is recorded as such.
+    const emptyCall = report.run.reach.calls.find((call) => call.call.includes('query=127.0.0.1'));
+    assert.equal(emptyCall.status, 'ok', 'the search answered, it just had no results');
+    assert.equal(emptyCall.items, 0, 'the run metadata says it found nothing');
+
+    // A source that fails is a failed, metered call and never a claim.
+    const redditSource = report.run.reach.sources.find((source) => source.source === 'reddit');
+    assert.equal(redditSource.status, 'failed');
+    assert.equal(redditSource.items, 0);
+    assert.ok(
+      costs.lines.some((line) => line.source === 'reddit' && line.status === 'failed'),
+      'the failing search is in the cost meter',
+    );
+    assert.ok(!report.claims.some((claim) => claim.claim.startsWith('Reddit post')), 'a failure makes no claim');
+    assert.match(markdown, /### Reddit[\s\S]*did not answer \(failed\), no claim made\./);
+
+    const reachClaim = report.claims.find((claim) => claim.label === 'inferred' && claim.claim.startsWith('Reach:'));
+    assert.ok(reachClaim, 'the items found are read as a reach claim');
+    for (const ref of reachClaim.inferred_from) {
+      assert.ok(seenIds.has(ref), `reach claim cites ${ref}, which is a Seen claim`);
+    }
+    assert.equal(reachClaim.inferred_from.length, hnClaims.length, 'it cites every item it counts');
+    assert.equal(
+      reachClaim.claim,
+      'Reach: 2 items across 1 channel, the busiest Hacker News with 2, the earliest dated 2024-08-15.',
+      'exact counts, the busiest channel, the earliest dated item',
+    );
+    for (const item of report.run.reach.items) {
+      assert.ok(markdown.includes(item.date) && markdown.includes(item.url), `${item.title} is printed with its date and link`);
+    }
+
+    // --- reach, second run: both sources answer, and a repeated story is one claim ---
+
+    stub.setMode('second');
+    const out2 = await mkdtemp(join(tmpdir(), 'growthmap-test-'));
+    await runReport(out2);
+    const report2 = JSON.parse(await readFile(join(out2, 'report.json'), 'utf8'));
+    const costs2 = JSON.parse(await readFile(join(out2, 'costs.json'), 'utf8'));
+    const seenIds2 = new Set(report2.claims.filter((claim) => claim.label === 'seen').map((claim) => claim.id));
+
+    assert.equal(
+      report2.claims.filter((claim) => claim.claim.startsWith('Hacker News post')).length,
+      2,
+      'a story both queries returned is one claim, not two',
+    );
+    const redditClaims = report2.claims.filter((claim) => claim.claim.startsWith('Reddit post'));
+    assert.equal(redditClaims.length, 3);
+    assert.match(redditClaims[0].claim, /in r\/SideProject/, 'the subreddit is named');
+    assert.match(redditClaims[0].claim, /210 points, 34 comments/, 'the score is the API\'s own');
+    assert.match(redditClaims[0].claim, /dated 2024-06-01/);
+    assert.match(redditClaims[0].evidence[0].url, /^https:\/\/www\.reddit\.com\/r\//, 'the permalink is recorded');
+
+    const reach2 = report2.claims.find((claim) => claim.claim.startsWith('Reach:'));
+    for (const ref of reach2.inferred_from) assert.ok(seenIds2.has(ref), `reach claim cites ${ref}, which exists`);
+    assert.equal(
+      reach2.claim,
+      'Reach: 5 items across 2 channels, the busiest Reddit with 3, the earliest dated 2024-06-01.',
+      'two channels, the busiest counted, the earliest item named',
+    );
+    const sum2 = costs2.lines.reduce((total, line) => total + line.cost, 0);
+    assert.equal(costs2.total, Number(sum2.toFixed(2)), 'the total is still the sum of the lines');
+    assert.ok(costs2.lines.every((line) => line.cost === 0), 'every reach call is free');
+
+    // --- reach, third run: a rate-limit refusal ends the work, no retry ---
+
+    stub.setMode('third');
+    const out3 = await mkdtemp(join(tmpdir(), 'growthmap-test-'));
+    await runReport(out3);
+    const report3 = JSON.parse(await readFile(join(out3, 'report.json'), 'utf8'));
+    const costs3 = JSON.parse(await readFile(join(out3, 'costs.json'), 'utf8'));
+    const markdown3 = await readFile(join(out3, 'report.md'), 'utf8');
+
+    assert.ok(report3.run.reach.stopped, 'the run records that a search rate-limited it');
+    assert.equal(report3.run.reach.attempts, 1, 'nothing is retried after the refusal');
+    assert.deepEqual(
+      report3.run.reach.calls.map((call) => call.status),
+      ['rate_limited', 'skipped', 'skipped'],
+      'the calls after the refusal are skipped, not made',
+    );
+    assert.ok(
+      costs3.lines.some((line) => line.source === 'hackernews' && line.status === 'failed'),
+      'the refused call is a failed metered call',
+    );
+    assert.equal(
+      costs3.lines.filter(
+        (line) => line.status === 'skipped' && line.reason && ['hackernews', 'reddit'].includes(line.source),
+      ).length,
+      2,
+      'the skipped reach calls still carry their reason in the meter',
+    );
+    assert.ok(
+      !report3.claims.some((claim) => /^(Hacker News|Reddit) post/.test(claim.claim)),
+      'a run with no answers makes no reach claim',
+    );
+    assert.match(markdown3, /The reach search asked us to slow down after 1 call/);
   });
 });

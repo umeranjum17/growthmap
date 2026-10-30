@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { fetchSite } from '../src/site.js';
 import { fetchSitemap } from '../src/sitemap.js';
 import { archiveDates } from '../src/archive.js';
+import { fetchReach, hnUrl, redditUrl } from '../src/reach.js';
 import { buildReport, renderMarkdown } from '../src/report.js';
 
 const USAGE = `growthmap — read an app's public pages, label every claim.
@@ -15,6 +16,7 @@ Usage:
 
 Reads the homepage and /pricing, /about, /features when they answer.
 Dated each page from the public web archive, plus the pages /sitemap.xml advertises.
+Searches Hacker News and Reddit for the app name and its host.
 Writes report.md, report.json and costs.json into <dir> (default: growthmap-out).`;
 
 function parseArgs(argv) {
@@ -90,6 +92,15 @@ async function main(argv) {
   const archive = await archiveDates([...new Set([...siteUrls, ...sitemap.urls])]);
   const archiveCostLines = archive.costLines;
 
+  // Reach: the app as other people wrote it down. The name is the host without
+  // its www and its domain, which is what a person would type into a search.
+  const appName = url.hostname.replace(/^www\./i, '').split('.')[0] || url.hostname;
+  const reach = await fetchReach([
+    { source: 'hackernews', url: hnUrl(appName) },
+    { source: 'hackernews', url: hnUrl(url.hostname) },
+    { source: 'reddit', url: redditUrl(appName) },
+  ]);
+
   const report = buildReport({
     target: url.href,
     host: url.host,
@@ -97,7 +108,8 @@ async function main(argv) {
     pages,
     archive,
     sitemap: { status: sitemap.status, urls: sitemap.urls.length },
-    costLines: [...costLines, ...sitemapCostLines, ...archiveCostLines],
+    reach,
+    costLines: [...costLines, ...sitemapCostLines, ...archiveCostLines, ...reach.costLines],
     started_at,
     finished_at: new Date().toISOString(),
   });
