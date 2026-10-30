@@ -1,10 +1,13 @@
 // The public web archive: one CDX request per URL, no retries.
 // The endpoint is the public one; GROWTHMAP_ARCHIVE_URL only exists so the test
 // can point the same code at a local stub and stay offline.
+import { setTimeout as sleep } from 'node:timers/promises';
 import { getText } from './site.js';
 
 const DEFAULT_CDX = 'https://web.archive.org/cdx/search/cdx';
 const ROW_CAP = 100;
+// A deliberate gap between archive calls: the archive rate-limits a burst.
+const GAP_MS = 400;
 
 /** The request that asks the archive for this exact URL, oldest capture first. */
 export function cdxUrl(url) {
@@ -58,23 +61,48 @@ export function parseCdx(text) {
  * Ask the archive for the first-seen date of each URL, in order.
  * Dated pages come back with their evidence; a page the archive has never
  * captured is undated; a call that errored or timed out is a failed call.
- * Every call is metered, failed ones included.
+ * Every call is metered, and so is every call the archive made us stop short of.
+ *
+ * Calls are spaced by GAP_MS. The first 429 ends the archive work for this run:
+ * that call is failed, the rest are metered as skipped with a reason, and
+ * nothing is retried.
  */
 export async function archiveDates(urls) {
   const dated = [];
   const undated = [];
   const failed = [];
+  const skipped = [];
   const costLines = [];
+  let attempts = 0;
+  let stopped = null;
+
   for (const url of urls) {
     const fetched_at = new Date().toISOString().slice(0, 10);
     const endpoint = cdxUrl(url);
     const call = `GET ${endpoint}`;
+
+    if (stopped) {
+      costLines.push({ source: 'archive', call, cost: 0, status: 'skipped', reason: stopped.reason });
+      skipped.push(url);
+      continue;
+    }
+
+    if (attempts > 0) await sleep(GAP_MS);
+    attempts += 1;
     const result = await getText(endpoint, 'application/json');
+
+    if (result.status === 'http_429') {
+      stopped = { reason: `the archive answered 429 (rate limited) after ${attempts} call(s)`, after: attempts };
+      costLines.push({ source: 'archive', call, cost: 0, status: 'failed', reason: 'HTTP 429, rate limited' });
+      failed.push(url);
+      continue;
+    }
     if (result.status !== 'ok') {
       costLines.push({ source: 'archive', call, cost: 0, status: 'failed' });
       failed.push(url);
       continue;
     }
+
     costLines.push({ source: 'archive', call, cost: 0, status: 'ok' });
     const capture = parseCdx(result.body);
     if (!capture) {
@@ -83,5 +111,6 @@ export async function archiveDates(urls) {
     }
     dated.push({ url, fetched_at, ...capture });
   }
-  return { dated, undated, failed, costLines };
+
+  return { dated, undated, failed, skipped, attempts, stopped, costLines };
 }

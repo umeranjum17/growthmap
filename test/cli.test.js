@@ -33,13 +33,16 @@ const FIXTURES = {
       <url><loc>http://FIXTURE_ORIGIN/pricing/teams</loc></url>
       <url><loc>http://FIXTURE_ORIGIN/ghost-page</loc></url>
       <url><loc>http://FIXTURE_ORIGIN/broken-page</loc></url>
+      <url><loc>http://FIXTURE_ORIGIN/limited-page</loc></url>
+      <url><loc>http://FIXTURE_ORIGIN/after-limit</loc></url>
     </urlset>`,
 };
 
 // The archive stub: the captures each URL has. A URL with no entry (or an empty
 // list) answers with the header row only, which means the archive never
 // captured it. /homepage and /pricing are dated; /ghost-page is not; the
-// archive errors for /broken-page.
+// archive errors for /broken-page and rate-limits us at /limited-page, which
+// must end the archive work for the run (/after-limit is never asked).
 const ARCHIVE = {
   '/': [['20240801000000', '200', '/']],
   '/pricing': [['20241122200902', '200', '/pricing']],
@@ -65,6 +68,11 @@ async function withFixtureSite(fn) {
       if (pathname === '/broken-page') {
         response.writeHead(500, { 'content-type': 'text/plain' });
         response.end('archive is having a bad day');
+        return;
+      }
+      if (pathname === '/limited-page') {
+        response.writeHead(429, { 'content-type': 'text/plain' });
+        response.end('slow down');
         return;
       }
       const rows = ARCHIVE[pathname] ?? [];
@@ -180,6 +188,25 @@ test('growthmap run writes a labelled, costed report for a real site', async () 
     );
     assert.ok(!report.claims.some((claim) => claim.claim.includes('/broken-page')), 'a failure never becomes a date');
 
+    // A 429 stops the archive work: that call failed, the rest are skipped and
+    // still metered, and the report says so plainly. Nothing is retried.
+    const stopped = report.run.archive.stopped;
+    assert.ok(stopped, 'the run records that the archive rate-limited it');
+    assert.equal(report.run.archive.attempts, stopped.after, 'attempts stop at the call that got the 429');
+    assert.ok(report.run.archive.skipped.includes(`${origin}/after-limit`), 'the never-asked page is listed as skipped');
+    assert.ok(
+      !costs.lines.some((line) => line.source === 'archive' && line.call.includes('after-limit') && line.status !== 'skipped'),
+      'no archive request is made after the 429',
+    );
+    assert.ok(
+      costs.lines.some((line) => line.status === 'skipped' && line.reason),
+      'a skipped call carries its reason',
+    );
+    assert.ok(
+      markdown.includes(`The archive asked us to slow down after ${stopped.after} calls; 1 page was not attempted this run.`),
+      'the report says plainly that it stopped early',
+    );
+
     // The timeline: oldest to newest, each line with its date and archive link.
     const dates = report.run.timeline.map((row) => row.date);
     assert.deepEqual(dates, [...dates].sort(), 'the timeline runs oldest to newest');
@@ -191,7 +218,7 @@ test('growthmap run writes a labelled, costed report for a real site', async () 
     assert.match(markdown, /## Timeline/);
 
     // The timeline claim is Inferred, cites only Seen ids, and counts exactly.
-    const timelineClaim = report.claims.find((claim) => claim.label === 'inferred' && /Timeline|Pages were added/.test(claim.claim));
+    const timelineClaim = report.claims.find((claim) => claim.label === 'inferred' && /Timeline|Pages were first seen/.test(claim.claim));
     assert.ok(timelineClaim, 'the dates are read as a timeline');
     for (const ref of timelineClaim.inferred_from) {
       assert.ok(seenIds.has(ref), `timeline claim cites ${ref}, which is a Seen claim`);
@@ -203,6 +230,12 @@ test('growthmap run writes a labelled, costed report for a real site', async () 
     );
     assert.match(timelineClaim.claim, new RegExp(`${report.run.timeline.length} dated pages`), 'exact page count');
     assert.ok(timelineClaim.claim.includes(report.run.timeline[0].date), 'exact earliest date');
+
+    // Whatever timeline sentence is printed, its month figure must be the real
+    // number of distinct months its own dates span.
+    const distinctMonths = new Set(report.run.timeline.map((row) => row.date.slice(0, 7))).size;
+    const statedMonths = Number(/(\d+) different months/.exec(timelineClaim.claim)?.[1] ?? NaN);
+    assert.equal(statedMonths, distinctMonths, 'the stated month count matches the dates in the same sentence');
 
     const home = report.claims.find((claim) => claim.id === 's1');
     assert.match(home.claim, /Homepage describes itself as/, 'a meta description quote says so plainly');

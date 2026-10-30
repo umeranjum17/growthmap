@@ -93,10 +93,12 @@ function timelineClaim(timeline, id, seenIds) {
   }
   const cluster = busiest > 1 ? `, with ${busiest} first seen in ${busiestMonth}` : '';
 
+  // Every number here is counted, never estimated: the total dated pages, the
+  // distinct months that hold one, the earliest, the most recent.
   let claim;
   if (total === 1) claim = `Timeline: 1 dated page, first seen ${earliest}.`;
   else if (months.size === 1) claim = `Timeline: ${total} dated pages, all first seen in ${earliest.slice(0, 7)} (${earliest} to ${latest}).`;
-  else claim = `Pages were added over ${months.size} months: ${total} dated pages, the earliest ${earliest}, the most recent ${latest}${cluster}.`;
+  else claim = `Pages were first seen in ${months.size} different months: ${total} dated pages, the earliest ${earliest}, the most recent ${latest}${cluster}.`;
 
   return makeClaim(
     {
@@ -181,6 +183,9 @@ export function buildReport(run) {
         dated: timeline.length,
         undated: run.archive?.undated ?? [],
         failed: run.archive?.failed ?? [],
+        skipped: run.archive?.skipped ?? [],
+        attempts: run.archive?.attempts ?? 0,
+        stopped: run.archive?.stopped ?? null,
         sitemap: run.sitemap ?? { status: 'skipped', urls: 0 },
       },
     },
@@ -223,12 +228,22 @@ export function renderMarkdown({ run, claims, costs }) {
   }
   const undated = run.archive?.undated ?? [];
   const failedCalls = run.archive?.failed ?? [];
+  const skippedCalls = run.archive?.skipped ?? [];
   if (undated.length) lines.push('', `Undated: ${undated.length} page(s) the archive has never captured, no date claimed (listed in report.json).`);
   if (failedCalls.length) lines.push('', `Unanswered: ${failedCalls.length} page(s) the archive did not answer for, no date claimed (listed in report.json).`);
+  if (run.archive?.stopped) {
+    const notAttempted =
+      skippedCalls.length === 1 ? '1 page was not attempted' : `${skippedCalls.length} pages were not attempted`;
+    lines.push(
+      '',
+      `The archive asked us to slow down after ${run.archive.stopped.after} calls; ${notAttempted} this run.`,
+    );
+  }
 
   lines.push('', '## Cost', '', '| source | call | cost (USD) |', '| --- | --- | --- |');
   for (const line of costs.lines) {
-    lines.push(`| ${line.source} | ${line.call}${line.status === 'failed' ? ' (failed)' : ''} | ${line.cost.toFixed(2)} |`);
+    const marker = line.status && line.status !== 'ok' ? ` (${line.status})` : '';
+    lines.push(`| ${line.source} | ${line.call}${marker} | ${line.cost.toFixed(2)} |`);
   }
   lines.push('', `**Total: ${costs.total.toFixed(2)} USD**`, '');
 
