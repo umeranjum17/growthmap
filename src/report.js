@@ -1,5 +1,6 @@
 // Turns fetched pages into the report: claims first, then the cost table.
 import { makeClaim, SEEN, INFERRED } from './claim.js';
+import { archiveUrl, dateOf, recordedLine } from './archive.js';
 
 const round = (value) => Number(value.toFixed(2));
 const quoted = (text) => `"${text}"`;
@@ -49,6 +50,67 @@ function priceShapeClaim(pricing, id, seenIds) {
   );
 }
 
+const pathOf = (url) => {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url;
+  }
+};
+
+/** One Seen claim per dated page: the day the archive first recorded it. */
+function datedClaim(entry, page, id) {
+  const label = page ? (KIND_LABEL[page.kind] ?? page.kind) : `Page ${pathOf(entry.url)}`;
+  return makeClaim({
+    id,
+    claim: `${label} first seen in the archive on ${dateOf(entry.timestamp)}.`,
+    label: SEEN,
+    evidence: [
+      {
+        url: archiveUrl(entry.timestamp, entry.url),
+        page_url: entry.url,
+        quote: recordedLine(entry),
+        fetched_at: entry.fetched_at,
+      },
+    ],
+  });
+}
+
+/** Exact counts, never a rounded guess: how many pages, and how they cluster. */
+function timelineClaim(timeline, id, seenIds) {
+  const total = timeline.length;
+  const earliest = timeline[0].date;
+  const latest = timeline[total - 1].date;
+  const months = new Map();
+  for (const row of timeline) months.set(row.date.slice(0, 7), (months.get(row.date.slice(0, 7)) ?? 0) + 1);
+  let busiestMonth = '';
+  let busiest = 0;
+  for (const [month, count] of months) {
+    if (count > busiest) {
+      busiest = count;
+      busiestMonth = month;
+    }
+  }
+  const cluster = busiest > 1 ? `, with ${busiest} first seen in ${busiestMonth}` : '';
+
+  // Every number here is counted, never estimated: the total dated pages, the
+  // distinct months that hold one, the earliest, the most recent.
+  let claim;
+  if (total === 1) claim = `Timeline: 1 dated page, first seen ${earliest}.`;
+  else if (months.size === 1) claim = `Timeline: ${total} dated pages, all first seen in ${earliest.slice(0, 7)} (${earliest} to ${latest}).`;
+  else claim = `Pages were first seen in ${months.size} different months: ${total} dated pages, the earliest ${earliest}, the most recent ${latest}${cluster}.`;
+
+  return makeClaim(
+    {
+      id,
+      claim,
+      label: INFERRED,
+      inferred_from: timeline.map((row) => row.claim_id).sort((a, b) => Number(a.slice(1)) - Number(b.slice(1))),
+    },
+    seenIds,
+  );
+}
+
 /**
  * Build every claim and the cost total for one run.
  * @param {{target: string, host: string, pages: object[], costLines: object[], started_at: string, finished_at: string}} run
@@ -67,11 +129,35 @@ export function buildReport(run) {
     page.claim_id = id;
   }
 
+  // One Seen claim per page the archive could date, oldest first in the timeline.
+  const pageByUrl = new Map(pages.map((page) => [page.url, page]));
+  const timeline = [];
+  for (const entry of run.archive?.dated ?? []) {
+    const page = pageByUrl.get(entry.url);
+    const id = `s${claims.length + 1}`;
+    const claim = datedClaim(entry, page, id);
+    claims.push(claim);
+    seenIds.add(id);
+    timeline.push({
+      date: dateOf(entry.timestamp),
+      label: page ? (KIND_LABEL[page.kind] ?? page.kind) : `Page ${pathOf(entry.url)}`,
+      url: entry.url,
+      archive_url: archiveUrl(entry.timestamp, entry.url),
+      archived_at: entry.timestamp,
+      captures: entry.capture_count,
+      captures_capped: entry.capture_count_capped,
+      claim_id: id,
+    });
+  }
+  timeline.sort((a, b) => a.date.localeCompare(b.date) || a.url.localeCompare(b.url));
+
   const home = byKind('homepage');
   const pricing = byKind('pricing');
+  const nextInferredId = () => `i${claims.filter((claim) => claim.label === INFERRED).length + 1}`;
 
-  if (home) claims.push(positioningClaim(home, pricing, `i${claims.filter((c) => c.label === INFERRED).length + 1}`, seenIds));
-  if (pricing) claims.push(priceShapeClaim(pricing, `i${claims.filter((c) => c.label === INFERRED).length + 1}`, seenIds));
+  if (home) claims.push(positioningClaim(home, pricing, nextInferredId(), seenIds));
+  if (pricing) claims.push(priceShapeClaim(pricing, nextInferredId(), seenIds));
+  if (timeline.length > 0) claims.push(timelineClaim(timeline, nextInferredId(), seenIds));
 
   const total = round(run.costLines.reduce((sum, line) => sum + line.cost, 0));
 
@@ -92,6 +178,16 @@ export function buildReport(run) {
         fetched_at: page.fetched_at,
         claim_id: page.claim_id ?? null,
       })),
+      timeline,
+      archive: {
+        dated: timeline.length,
+        undated: run.archive?.undated ?? [],
+        failed: run.archive?.failed ?? [],
+        skipped: run.archive?.skipped ?? [],
+        attempts: run.archive?.attempts ?? 0,
+        stopped: run.archive?.stopped ?? null,
+        sitemap: run.sitemap ?? { status: 'skipped', urls: 0 },
+      },
     },
     claims,
     costs: { lines: run.costLines, total },
@@ -112,7 +208,8 @@ export function renderMarkdown({ run, claims, costs }) {
     lines.push(`- **${claim.id}** ${claim.claim}`);
     for (const entry of claim.evidence) {
       lines.push(`  > ${entry.quote}`);
-      lines.push(`  <${entry.url}> (fetched ${entry.fetched_at}, HTTP ${entry.http_status})`);
+      lines.push(`  <${entry.url}> (fetched ${entry.fetched_at}${entry.http_status ? `, HTTP ${entry.http_status}` : ''})`);
+      if (entry.page_url) lines.push(`  page: <${entry.page_url}>`);
     }
   }
 
@@ -124,8 +221,30 @@ export function renderMarkdown({ run, claims, costs }) {
     lines.push(`  from: ${claim.inferred_from.join(', ')}`);
   }
 
+  lines.push('', '## Timeline', '');
+  if (run.timeline.length === 0) lines.push('- No page could be dated by the archive this run.');
+  for (const row of run.timeline) {
+    lines.push(`- **${row.date}** ${row.label} — <${row.archive_url}>`);
+  }
+  const undated = run.archive?.undated ?? [];
+  const failedCalls = run.archive?.failed ?? [];
+  const skippedCalls = run.archive?.skipped ?? [];
+  if (undated.length) lines.push('', `Undated: ${undated.length} page(s) the archive has never captured, no date claimed (listed in report.json).`);
+  if (failedCalls.length) lines.push('', `Unanswered: ${failedCalls.length} page(s) the archive did not answer for, no date claimed (listed in report.json).`);
+  if (run.archive?.stopped) {
+    const notAttempted =
+      skippedCalls.length === 1 ? '1 page was not attempted' : `${skippedCalls.length} pages were not attempted`;
+    lines.push(
+      '',
+      `The archive asked us to slow down after ${run.archive.stopped.after} calls; ${notAttempted} this run.`,
+    );
+  }
+
   lines.push('', '## Cost', '', '| source | call | cost (USD) |', '| --- | --- | --- |');
-  for (const line of costs.lines) lines.push(`| ${line.source} | ${line.call} | ${line.cost.toFixed(2)} |`);
+  for (const line of costs.lines) {
+    const marker = line.status && line.status !== 'ok' ? ` (${line.status})` : '';
+    lines.push(`| ${line.source} | ${line.call}${marker} | ${line.cost.toFixed(2)} |`);
+  }
   lines.push('', `**Total: ${costs.total.toFixed(2)} USD**`, '');
 
   return lines.join('\n');

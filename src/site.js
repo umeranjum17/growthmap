@@ -1,8 +1,38 @@
-// The one source this slice has: the app's own public pages.
-// One request per page, a normal user agent, a 20 second timeout, no retries.
+// The app's own public pages: one request per page, a normal user agent, a
+// 20 second timeout, no retries. The same getText() serves the archive and
+// sitemap sources so the politeness rules live in one place.
+
+import { gunzipSync } from 'node:zlib';
 
 const USER_AGENT = 'growthmap/0.1 (public pages reader; growthmap report tool)';
 const TIMEOUT_MS = 20_000;
+
+const gunzipped = (buffer) =>
+  buffer[0] === 0x1f && buffer[1] === 0x8b ? gunzipSync(buffer).toString('utf8') : buffer.toString('utf8');
+
+/**
+ * One polite GET: the shared user agent, the shared timeout, no retries.
+ * Every source uses this so the discipline is one place.
+ */
+export async function getText(url, accept) {
+  try {
+    const response = await fetch(url, {
+      redirect: 'follow',
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+      headers: { 'user-agent': USER_AGENT, accept },
+    });
+    const http_status = response.status;
+    if (http_status !== 200) {
+      await response.body?.cancel().catch(() => {});
+      return { http_status, status: `http_${http_status}` };
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    return { http_status, status: 'ok', body: gunzipped(buffer) };
+  } catch (error) {
+    const timedOut = error?.name === 'TimeoutError' || error?.name === 'AbortError';
+    return { status: timedOut ? 'timeout' : 'error', error: String(error?.message ?? error) };
+  }
+}
 
 const PAGES = [
   { kind: 'homepage', path: '/' },
