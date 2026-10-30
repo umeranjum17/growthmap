@@ -828,3 +828,51 @@ test('growthmap run writes a labelled, costed report for a real site', async () 
     );
   });
 });
+
+test('the landing page is one self-contained file that loads nothing', async () => {
+  const dir = fileURLToPath(new URL('../docs/', import.meta.url));
+  assert.deepEqual((await readdir(dir)).sort(), ['index.html'], 'one file, nothing beside it');
+  const html = await readFile(join(dir, 'index.html'), 'utf8');
+
+  // Everything it needs ships inside it: no script, no stylesheet, no image or
+  // font it has to fetch, so it opens the same from file:// and from the web.
+  assert.match(html, /<style>/, 'its styles are inline');
+  for (const [name, pattern] of [
+    ['script', /<script/i],
+    ['stylesheet link', /<link\b/i],
+    ['src attribute', /\bsrc\s*=/i],
+    ['css import', /@import/i],
+    ['css url()', /url\(/i],
+    ['inline style attribute', /\sstyle\s*=/i],
+  ]) {
+    assert.doesNotMatch(html, pattern, `the page carries no ${name}`);
+  }
+
+  // The only http(s) in the page is inside a link a reader may choose to open.
+  assert.doesNotMatch(
+    html.replace(/<a\b[^>]*>[\s\S]*?<\/a>/g, ''),
+    /https?:/i,
+    'no external resource is referenced',
+  );
+
+  // The quoted output is real: every printed line is in the committed report.
+  const block = /<pre>([\s\S]*?)<\/pre>/.exec(html)[1];
+  const example = await readFile(new URL('../examples/plausible.io/report.md', import.meta.url), 'utf8');
+  let from = 0;
+  for (const line of block.split('\n').filter((text) => text.trim())) {
+    const at = example.indexOf(line, from);
+    assert.ok(at >= 0, `the printed line is in the committed report: ${line.slice(0, 48)}`);
+    from = at + line.length;
+  }
+
+  // Both labels the rule rests on, and the links the footer promises.
+  assert.match(html, /Every claim is <em>Seen<\/em>, with a link, or <i>Inferred<\/i>/);
+  for (const href of [
+    'https://github.com/umeranjum17/growthmap',
+    'https://x.com/umership',
+    'https://web.archive.org/web/20190722082333/https://plausible.io/',
+  ]) {
+    assert.ok(html.includes(`href="${href}"`), `${href} is linked`);
+  }
+  assert.doesNotMatch(html, /\u2014/, 'plain hyphen only, never an em dash');
+});

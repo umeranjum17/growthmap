@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>growthmap - reverse-engineer how an app is marketed and distributed</title>
+<meta name="description" content="growthmap is a free, open-source command line tool. Every claim is Seen, with a link, or Inferred, with the Seen records it stands on.">
+<meta name="color-scheme" content="dark">
+<style>
+:root{
+  --bg:#0d0e10;
+  --band:#131518;
+  --band2:#1b1f25;
+  --ink:#e9ebee;
+  --ink-2:#aab0b8;
+  --line:#2a2d33;
+  --accent:#6fd6b4;
+  --accent-ink:#06130e;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --s1:8px;--s2:16px;--s3:24px;--s4:32px;
+}
+*{box-sizing:border-box}
+html{color-scheme:dark;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.6;overflow-wrap:break-word}
+.wrap{max-width:720px;margin:0 auto;padding:0 var(--s3)}
+a{color:var(--accent);text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px}
+a:hover{text-decoration-thickness:2px}
+a:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
+h1,h2,p,ol,pre{margin:0}
+section{padding:clamp(36px,8vw,56px) 0;border-top:1px solid var(--line)}
+h2{font-size:15px;font-weight:600;letter-spacing:.02em;color:var(--ink-2);margin-bottom:var(--s2)}
+p{max-width:34em}
+
+/* top: name, one line, three steps */
+header{padding:var(--s4) 0 clamp(36px,8vw,56px)}
+.name{font-family:var(--mono);font-size:22px;font-weight:700;letter-spacing:-.02em;color:var(--ink)}
+h1{font-family:var(--serif);font-weight:600;font-size:clamp(23px,6.2vw,34px);line-height:1.22;letter-spacing:-.01em;margin-top:var(--s1);max-width:18em}
+.steps{list-style:none;padding:0;margin-top:var(--s4);counter-reset:s;border-top:1px solid var(--line)}
+.steps li{counter-increment:s;display:grid;grid-template-columns:30px 1fr;gap:var(--s1);padding:var(--s2) 0;border-bottom:1px solid var(--line)}
+.steps li::before{content:counter(s);font-family:var(--mono);color:var(--accent);font-weight:700}
+
+/* the honesty rule: the centrepiece */
+#rule{background:var(--band);border-top:1px solid var(--accent);padding:clamp(44px,10vw,72px) 0}
+#rule h2{color:var(--accent)}
+.rule{font-family:var(--serif);font-weight:600;font-size:clamp(30px,8.4vw,52px);line-height:1.14;letter-spacing:-.01em;max-width:15em}
+.rule em{font-style:normal;border-bottom:3px solid var(--accent)}
+.rule i{font-style:normal;border-bottom:3px dashed var(--accent)}
+.sample{margin-top:var(--s4);display:grid;gap:var(--s3)}
+.rec{padding:var(--s2) 0 var(--s2) var(--s3);font-size:16px}
+.rec .lab{display:inline-flex;align-items:center;min-height:26px;padding:0 10px;font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:.06em}
+.rec .id{font-family:var(--mono);color:var(--ink-2);margin-left:var(--s1)}
+.rec p{margin-top:4px;max-width:30em}
+.rec .src{margin-top:var(--s1);font-family:var(--mono);font-size:14px;color:var(--ink-2);overflow-wrap:anywhere}
+.rec .src a{display:inline-block;min-height:44px;padding:10px 0;line-height:1.5}
+.seen{border-left:6px solid var(--accent)}
+.seen .lab{background:var(--accent);color:var(--accent-ink)}
+.inf{border-left:6px dashed var(--accent)}
+.inf .lab{border:2px solid var(--accent);color:var(--accent);border-radius:999px;padding:0 12px}
+.parent{display:inline-block;padding:1px 8px;margin-left:4px;font-family:var(--mono);font-weight:700;color:var(--accent);border:1px solid var(--accent)}
+.key{margin-top:var(--s3);font-size:15px;color:var(--ink-2);max-width:30em}
+
+/* real output, cost, agent */
+.label{font-family:var(--mono);font-size:14px;color:var(--ink-2);margin-bottom:var(--s2)}
+pre{font-family:var(--mono);font-size:13.5px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--band);border:1px solid var(--line);border-left:3px solid var(--accent);padding:var(--s2);color:var(--ink)}
+.out p.caption{margin-top:var(--s2);font-size:15px;color:var(--ink-2);max-width:32em}
+
+/* install and use */
+#use{background:var(--band2)}
+#use pre{background:var(--bg)}
+.note{font-family:var(--mono);font-size:15px;color:var(--ink)}
+.install{list-style:none;padding:0;display:grid;gap:var(--s3);margin-top:var(--s2);counter-reset:u}
+.install>li{counter-increment:u}
+.install .m{display:flex;align-items:baseline;gap:var(--s1)}
+.install .m::before{content:counter(u);font-family:var(--mono);font-weight:700;color:var(--accent)}
+.install p{margin-bottom:var(--s1)}
+.install pre{margin-top:0}
+
+footer{border-top:1px solid var(--line);padding:var(--s3) 0 var(--s4);font-size:16px}
+footer .wrap{display:flex;flex-wrap:wrap;gap:0 var(--s3);align-items:center}
+footer a,footer span{display:inline-flex;align-items:center;min-height:44px}
+footer span{color:var(--ink-2)}
+
+@media (min-width:760px){
+  body{font-size:18px}
+  .wrap{padding:0 var(--s4)}
+  .sample{grid-template-columns:1fr 1fr;gap:var(--s4);align-items:start}
+  pre{font-size:14px}
+}
+@media (prefers-reduced-motion:no-preference){
+  a{transition:text-decoration-thickness .15s ease-out}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div class="wrap">
+    <p class="name">growthmap</p>
+    <h1>Reverse-engineer how an app is marketed and distributed.</h1>
+    <ol class="steps">
+      <li><span>Give it an app.</span></li>
+      <li><span>It reads the app's own pages, their archive dates, and where the app is discussed, filmed, stored and hired.</span></li>
+      <li><span>It comes back with the channels, the dated moves, the positioning, and plays that must cite what it saw.</span></li>
+    </ol>
+  </div>
+</header>
+
+<section id="rule" aria-labelledby="rule-h">
+  <div class="wrap">
+    <h2 id="rule-h">The honesty rule</h2>
+    <p class="rule">Every claim is <em>Seen</em>, with a link, or <i>Inferred</i>, with the Seen records it stands on. Nothing else is printed.</p>
+
+    <div class="sample">
+      <article class="rec seen" aria-label="Seen record s4">
+        <span class="lab">SEEN</span><span class="id">s4</span>
+        <p>Homepage first seen in the archive on 2019-07-22.</p>
+        <p class="src">link: <a href="https://web.archive.org/web/20190722082333/https://plausible.io/">web.archive.org/web/20190722082333/https://plausible.io/</a></p>
+      </article>
+      <article class="rec inf" aria-label="Inferred record i1">
+        <span class="lab">INFERRED</span><span class="id">i1</span>
+        <p>Positioning: the homepage leads with "Plausible is a lightweight and open-source Google Analytics alternative."</p>
+        <p class="src">from: <span class="parent">s1</span></p>
+      </article>
+    </div>
+    <p class="key">Seen is a solid bar, a filled tag and a link. Inferred is a dashed bar, an outlined tag and the records it stands on.</p>
+  </div>
+</section>
+
+<section aria-labelledby="out-h">
+  <div class="wrap out">
+    <h2 id="out-h">Real output</h2>
+    <p class="label">From the committed example run: plausible.io</p>
+<pre>### 2. Own the comparison page against the incumbent
+
+**Effort:** One writer for a day per competitor page, five pages to start, then half a day a quarter each to keep the facts current.
+
+**First result:** Five /vs- pages live on your own host, linked from the pricing page, and a search for the incumbent's name plus 'alternative' that returns one of them.
+
+*Seen:* s17, s40, s9</pre>
+    <p class="caption">One play of four from that report, with its long prompt paragraph left out.</p>
+  </div>
+</section>
+
+<section aria-labelledby="cost-h">
+  <div class="wrap">
+    <h2 id="cost-h">Cost</h2>
+    <p>The run prints every call and the total. The base run is free and needs no key.</p>
+  </div>
+</section>
+
+<section aria-labelledby="agent-h">
+  <div class="wrap">
+    <h2 id="agent-h">Bring your own agent</h2>
+    <p>The plays are written by your own assistant. The tool refuses a play that cites evidence it did not see.</p>
+  </div>
+</section>
+
+<section id="use" aria-labelledby="use-h">
+  <div class="wrap">
+    <h2 id="use-h">Install and use</h2>
+    <p class="note">Needs Node 20 or newer. No install step.</p>
+    <ol class="install">
+      <li>
+        <div class="m"><p>Run it on one app. It writes the report.</p></div>
+        <pre>node bin/growthmap.js run example.com --out report</pre>
+      </li>
+      <li>
+        <div class="m"><p>Get the brief for your agent.</p></div>
+        <pre>node bin/growthmap.js playbook report</pre>
+      </li>
+      <li>
+        <div class="m"><p>Hand the plays back. It checks every citation.</p></div>
+        <pre>node bin/growthmap.js playbook report --accept plays.json</pre>
+      </li>
+    </ol>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Apache-2.0</span>
+    <a href="https://github.com/umeranjum17/growthmap">Repository</a>
+    <a href="https://x.com/umership">@umership</a>
+  </div>
+</footer>
+</body>
+</html>
