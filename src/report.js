@@ -1,6 +1,7 @@
 // Turns fetched pages into the report: claims first, then the cost table.
 import { makeClaim, SEEN, INFERRED } from './claim.js';
 import { archiveUrl, dateOf, recordedLine } from './archive.js';
+import { REACH_LABEL } from './reach.js';
 
 const round = (value) => Number(value.toFixed(2));
 const quoted = (text) => `"${text}"`;
@@ -111,6 +112,58 @@ function timelineClaim(timeline, id, seenIds) {
   );
 }
 
+/** One Seen claim per community item: the counts and date the answer gave. */
+function reachItemClaim(item, id) {
+  const label = REACH_LABEL[item.source] ?? item.source;
+  const noun = item.source === 'hackernews' ? 'story' : 'result';
+  const where = item.subreddit ? ` in r/${item.subreddit}` : '';
+  const counts = [];
+  if (item.points !== undefined) counts.push(`${item.points} points`);
+  if (item.comments !== undefined) counts.push(`${item.comments} comments`);
+  const said = counts.length ? ` (${counts.join(', ')})` : '';
+  const by = item.author ? ` by ${item.author}` : '';
+  const dated = item.date ? ` dated ${item.date}` : '';
+  const evidence = { url: item.url, quote: item.quote, fetched_at: item.fetched_at };
+  // The HN discussion page is where the counts live; the story link is the item itself.
+  if (item.discussion_url) {
+    evidence.url = item.discussion_url;
+    evidence.page_url = item.url;
+  }
+  return makeClaim({
+    id,
+    claim: `${label} ${noun} ${quoted(item.title)}${where}${said}${by}${dated}.`,
+    label: SEEN,
+    evidence: [evidence],
+  });
+}
+
+/** Exact counts, never a rounded guess: how many items, and on which channel. */
+function reachClaim(items, id, seenIds) {
+  const counts = new Map();
+  for (const item of items) counts.set(item.source, (counts.get(item.source) ?? 0) + 1);
+  let busiest = '';
+  let busiestCount = 0;
+  for (const [source, count] of counts) {
+    if (count > busiestCount) {
+      busiest = source;
+      busiestCount = count;
+    }
+  }
+  const dated = items.filter((item) => item.date).map((item) => item.date).sort();
+  const earliest = dated.length ? `, the earliest dated ${dated[0]}` : '';
+  const channels = counts.size === 1 ? '1 channel' : `${counts.size} channels`;
+  const noun = items.length === 1 ? 'item' : 'items';
+  return makeClaim(
+    {
+      id,
+      claim: `Reach: ${items.length} ${noun} across ${channels}, the busiest ${REACH_LABEL[busiest] ?? busiest} with ${busiestCount}${earliest}.`,
+      label: INFERRED,
+      inferred_from: items.map((item) => item.claim_id),
+    },
+    seenIds,
+  );
+}
+
 /**
  * Build every claim and the cost total for one run.
  * @param {{target: string, host: string, pages: object[], costLines: object[], started_at: string, finished_at: string}} run
@@ -151,6 +204,16 @@ export function buildReport(run) {
   }
   timeline.sort((a, b) => a.date.localeCompare(b.date) || a.url.localeCompare(b.url));
 
+  // One Seen claim per community item the reach sources returned. A source that
+  // found nothing contributes nothing here, so it can never become a claim.
+  const reachItems = [];
+  for (const item of run.reach?.items ?? []) {
+    const id = `s${claims.length + 1}`;
+    claims.push(reachItemClaim(item, id));
+    seenIds.add(id);
+    reachItems.push({ ...item, claim_id: id });
+  }
+
   const home = byKind('homepage');
   const pricing = byKind('pricing');
   const nextInferredId = () => `i${claims.filter((claim) => claim.label === INFERRED).length + 1}`;
@@ -158,6 +221,7 @@ export function buildReport(run) {
   if (home) claims.push(positioningClaim(home, pricing, nextInferredId(), seenIds));
   if (pricing) claims.push(priceShapeClaim(pricing, nextInferredId(), seenIds));
   if (timeline.length > 0) claims.push(timelineClaim(timeline, nextInferredId(), seenIds));
+  if (reachItems.length > 0) claims.push(reachClaim(reachItems, nextInferredId(), seenIds));
 
   const total = round(run.costLines.reduce((sum, line) => sum + line.cost, 0));
 
@@ -179,6 +243,13 @@ export function buildReport(run) {
         claim_id: page.claim_id ?? null,
       })),
       timeline,
+      reach: {
+        items: reachItems,
+        sources: run.reach?.sources ?? [],
+        calls: run.reach?.calls ?? [],
+        attempts: run.reach?.attempts ?? 0,
+        stopped: run.reach?.stopped ?? null,
+      },
       archive: {
         dated: timeline.length,
         undated: run.archive?.undated ?? [],
@@ -238,6 +309,32 @@ export function renderMarkdown({ run, claims, costs }) {
       '',
       `The archive asked us to slow down after ${run.archive.stopped.after} calls; ${notAttempted} this run.`,
     );
+  }
+  lines.push('', '## Reach', '');
+  const reachItems = run.reach?.items ?? [];
+  const reachSources = run.reach?.sources ?? [];
+  if (reachItems.length === 0 && reachSources.length === 0) lines.push('- Nothing found outside the site this run.');
+  for (const source of reachSources) {
+    lines.push(`### ${REACH_LABEL[source.source] ?? source.source}`, '');
+    const own = reachItems.filter((item) => item.source === source.source);
+    // A source that found nothing says so instead of inventing a line.
+    if (own.length === 0) {
+      const why = source.status === 'ok' ? 'found nothing for this query' : `did not answer (${source.status})`;
+      lines.push(`- ${why}, no claim made.`);
+    }
+    for (const item of own) {
+      const counts = [];
+      if (item.points !== undefined) counts.push(`${item.points} points`);
+      if (item.comments !== undefined) counts.push(`${item.comments} comments`);
+      const said = counts.length ? ` — ${counts.join(', ')}` : '';
+      const where = item.subreddit ? ` in r/${item.subreddit}` : '';
+      lines.push(`- **${item.date ?? 'undated'}** "${item.title}"${where}${said} — <${item.url}>`);
+      if (item.discussion_url) lines.push(`  discussion: <${item.discussion_url}>`);
+    }
+    lines.push('');
+  }
+  if (run.reach?.stopped) {
+    lines.push(`The reach search asked us to slow down after ${run.reach.stopped.after} call(s): ${run.reach.stopped.reason}.`, '');
   }
 
   lines.push('', '## Cost', '', '| source | call | cost (USD) |', '| --- | --- | --- |');
