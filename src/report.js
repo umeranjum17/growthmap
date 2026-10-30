@@ -3,13 +3,16 @@ import { makeClaim, SEEN, INFERRED } from './claim.js';
 
 const round = (value) => Number(value.toFixed(2));
 const quoted = (text) => `"${text}"`;
+const trimPunctuation = (text) => text.replace(/[.!?]+$/, '').trim();
 const KIND_LABEL = { homepage: 'Homepage', pricing: 'Pricing page', about: 'About page', features: 'Features page' };
 
 function seenClaim(page, id) {
   const label = KIND_LABEL[page.kind] ?? page.kind;
+  // Say where the quote came from: the page's own self-description, or its prose.
+  const verb = page.quote_source === 'description' ? 'describes itself as' : 'states';
   return makeClaim({
     id,
-    claim: page.title ? `${label} title: ${quoted(page.title)}.` : `${label} fetched; the page carries no <title>.`,
+    claim: `${label} ${verb}: ${quoted(trimPunctuation(page.quote))}.`,
     label: SEEN,
     evidence: [{ url: page.url, quote: page.quote, fetched_at: page.fetched_at, title: page.title, http_status: page.http_status }],
   });
@@ -17,8 +20,8 @@ function seenClaim(page, id) {
 
 /** Fixed rule: the positioning is the homepage lead plus the pricing framing. */
 function positioningClaim(home, pricing, id, seenIds) {
-  const parts = [`the homepage leads with ${quoted(home.quote.replace(/\.$/, ''))}`];
-  if (pricing) parts.push(`the pricing page says ${quoted(pricing.quote.replace(/\.$/, ''))}`);
+  const parts = [`the homepage leads with ${quoted(trimPunctuation(home.quote))}`];
+  if (pricing) parts.push(`the pricing page says ${quoted(trimPunctuation(pricing.quote))}`);
   return makeClaim(
     {
       id,
@@ -32,7 +35,8 @@ function positioningClaim(home, pricing, id, seenIds) {
 
 /** Fixed rule: the price shape is what the pricing page literally lists. */
 function priceShapeClaim(pricing, id, seenIds) {
-  const prices = [...new Set(pricing.text.match(/[$€£]\s?\d[\d.,]*/g) ?? [])];
+  // A price needs a digit right after the symbol; a fragment of a longer number is not a price.
+  const prices = [...new Set(pricing.text.match(/[$€£]\d[\d,]*(?:\.\d+)?(?![\d.])/g) ?? [])];
   const listed = prices.length > 8 ? `${prices.slice(0, 8).join(', ')} and ${prices.length - 8} more` : prices.join(', ');
   const mentionsFree = /\bfree\b/i.test(pricing.text);
   const free = mentionsFree ? ', and mentions a free option' : '';

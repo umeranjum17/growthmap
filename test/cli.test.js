@@ -14,10 +14,12 @@ const run = promisify(execFile);
 const CLI = fileURLToPath(new URL('../bin/growthmap.js', import.meta.url));
 
 const FIXTURES = {
-  '/': `<!doctype html><html><head><title>Acme - ship your app faster</title></head>
-    <body><h1>Ship faster</h1><p>Acme helps small teams ship their app to production faster with one command.</p></body></html>`,
+  '/': `<!doctype html><html><head><title>Acme - ship your app faster</title>
+    <meta property="og:description" content="Acme ships your team&#x27;s app faster, from first commit to production.">
+    </head><body><h1>Ship faster</h1><p>Acme helps small teams ship their app to production faster with one command.</p></body></html>`,
   '/pricing': `<!doctype html><html><head><title>Acme pricing</title></head>
-    <body><p>Simple pricing for every team.</p><ul><li>$9 per seat each month</li><li>$29 per seat each month</li></ul></body></html>`,
+    <body><p>Simple pricing for every team.</p><ul><li>$9 per seat each month</li><li>$29 per seat each month</li></ul>
+    <p>Add-ons from $ 1 per month</p></body></html>`,
   '/about': `<!doctype html><html><head><title>About Acme</title></head>
     <body><p>We are a small team building shipping tools for developers everywhere.</p></body></html>`,
 };
@@ -73,7 +75,17 @@ test('growthmap run writes a labelled, costed report for a real site', async () 
     assert.equal(costs.lines.length, 4, 'one metered call per page, the 404 included');
     assert.ok(costs.lines.every((line) => line.source && line.call));
 
+    const home = report.claims.find((claim) => claim.id === 's1');
+    assert.match(home.claim, /Homepage describes itself as/, 'a meta description quote says so plainly');
+    assert.match(home.evidence[0].quote, /your team's app faster/, 'numeric entities are decoded');
+
+    const priceShape = report.claims.find((claim) => claim.claim.startsWith('Price shape'));
+    assert.doesNotMatch(priceShape.claim, /\$ 1/, 'a space-separated digit is not a price');
+    assert.match(priceShape.claim, /\$9/);
+
     for (const claim of report.claims) {
+      assert.doesNotMatch(JSON.stringify(claim), /&#/, 'no undecoded HTML entities in any claim');
+      assert.doesNotMatch(claim.claim, /\.\./, 'no doubled full stop');
       assert.ok(markdown.includes(claim.id), `${claim.id} is printed in report.md`);
     }
     assert.ok(report.run.pages.some((page) => page.status === 'not_found'), 'the 404 is recorded, not claimed');
