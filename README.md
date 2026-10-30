@@ -10,7 +10,7 @@ Every run prints what each data call cost and the total at the end. The base run
 
 Live page: <https://umeranjum17.github.io/growthmap/>
 
-## Status: slice 4a, the playbook and one real example run
+## Status: slice 4a, the playbook and two real example runs
 
 Two commands run today. `growthmap run` reads the target app's own public pages, dates each of them from the public web archive and from the pages `/sitemap.xml` advertises, searches Hacker News, Reddit and YouTube for the app, reads its App Store and Google Play listings and the careers page on its own host, and writes a report where every line is either Seen, with a link the run fetched, or Inferred, with the Seen ids it stands on. `growthmap playbook` hands that report to your own agent and takes the plays back, refusing any play that cites evidence the run never saw. The landing page is slice 4b.
 
@@ -33,7 +33,7 @@ node bin/growthmap.js playbook report --accept plays.json
 
 The first command writes the brief: the app, the run date, every Seen record with its id, its claim, its url and its quote, the exact JSON shape to return, and the rule that every play must cite a Seen id from this run. Hand it to your own agent, which writes `plays.json`. The second command checks the answer and writes it into `report.md` as a `## Playbook` section; it refuses, and writes nothing, when a play cites an id this run never saw, cites none at all, or is missing its title, its effort, its first result or its prompt. No model call and no key are inside the tool.
 
-`examples/plausible.io/` is one complete real run against Plausible Analytics, with the brief and the plays written from it.
+`examples/plausible.io/` is one complete real run against Plausible Analytics, with the brief and the plays written from it. `examples/linear.app/` is a second real run: its report and its cost file, quoted on the landing page.
 
 ## What a report will hold
 
