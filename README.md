@@ -8,9 +8,9 @@ Every claim carries a label. **Seen** means the run fetched the evidence and the
 
 Every run prints what each data call cost and the total at the end. The base run reads public pages only. No paid key, no account, no subscription.
 
-## Status: slice 3a, Hacker News and Reddit reach
+## Status: slice 3, reach from Hacker News, Reddit, YouTube, the stores and hiring
 
-One command runs today. It reads the target app's own public pages, dates each of them from the public web archive and from the pages `/sitemap.xml` advertises, searches Hacker News and Reddit for the app name and its host, and writes a report where every line is either Seen, with a link the run fetched, or Inferred, with the Seen ids it stands on. Video, app stores, hiring and the playbook are later slices.
+One command runs today. It reads the target app's own public pages, dates each of them from the public web archive and from the pages `/sitemap.xml` advertises, searches Hacker News, Reddit and YouTube for the app, reads its App Store and Google Play listings and the careers page on its own host, and writes a report where every line is either Seen, with a link the run fetched, or Inferred, with the Seen ids it stands on. The playbook and the landing page are later slices.
 
 ## Usage
 
@@ -25,8 +25,8 @@ It writes `report.md` (the human report), `report.json` (the same claims as reco
 ## What a report will hold
 
 - **The growth curve.** What moved, by how much, and when.
-- **A dated timeline.** Every page the site advertises, with the day the public web archive first recorded it and a link you can open to the capture. Store presence and hiring join it in a later slice.
-- **Reach.** Where the app is talked about away from its own site: Hacker News stories and Reddit posts, each with its date, the counts the source itself states, and a link, plus one Inferred line counting the channels found.
+- **A dated timeline.** Every page the site advertises, with the day the public web archive first recorded it and a link you can open to the capture.
+- **Reach.** Where the app is talked about away from its own site: Hacker News stories, Reddit posts, YouTube videos, the App Store and Google Play listings, and the roles open on its careers page, each with a link, the counts the source itself states, and the date the run read it, plus one Inferred line counting the channels found.
 - **The positioning.** What the app claims, who it claims it for, and what it charges.
 - **A playbook.** Each play with its effort, its first result, and a ready prompt you can hand to an agent.
 - **The cost table.** Every source call, its price, and the total for the run.

@@ -7,6 +7,7 @@ import { fetchSite } from '../src/site.js';
 import { fetchSitemap } from '../src/sitemap.js';
 import { archiveDates } from '../src/archive.js';
 import { fetchReach, hnUrl, redditUrl } from '../src/reach.js';
+import { fetchExtraSources } from '../src/sources.js';
 import { buildReport, renderMarkdown } from '../src/report.js';
 
 const USAGE = `growthmap — read an app's public pages, label every claim.
@@ -16,7 +17,8 @@ Usage:
 
 Reads the homepage and /pricing, /about, /features when they answer.
 Dated each page from the public web archive, plus the pages /sitemap.xml advertises.
-Searches Hacker News and Reddit for the app's own address.
+Searches Hacker News and Reddit for the app's own address, YouTube for its name,
+and reads the App Store and Google Play listings and the app's own careers page.
 Writes report.md, report.json and costs.json into <dir> (default: growthmap-out).`;
 
 function parseArgs(argv) {
@@ -105,6 +107,15 @@ async function main(argv) {
     { source: 'hackernews', url: hnUrl(appHost), host: appHost, brand },
     { source: 'reddit', url: redditUrl(appHost), host: appHost, brand },
   ]);
+  // The rest of reach: video, the store listings, and the roles the app is hiring.
+  const extra = await fetchExtraSources({ origin: url.origin, host: appHost, brand, sitemapUrls: sitemap.urls });
+  const outside = {
+    items: [...reach.items, ...extra.items],
+    sources: [...reach.sources, ...extra.sources],
+    calls: [...reach.calls, ...extra.calls],
+    attempts: reach.attempts + extra.attempts,
+    stopped: reach.stopped ?? extra.stopped,
+  };
 
   const report = buildReport({
     target: url.href,
@@ -113,8 +124,8 @@ async function main(argv) {
     pages,
     archive,
     sitemap: { status: sitemap.status, urls: sitemap.urls.length },
-    reach,
-    costLines: [...costLines, ...sitemapCostLines, ...archiveCostLines, ...reach.costLines],
+    reach: outside,
+    costLines: [...costLines, ...sitemapCostLines, ...archiveCostLines, ...reach.costLines, ...extra.costLines],
     started_at,
     finished_at: new Date().toISOString(),
   });

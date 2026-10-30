@@ -7,6 +7,36 @@ const round = (value) => Number(value.toFixed(2));
 const quoted = (text) => `"${text}"`;
 const trimPunctuation = (text) => text.replace(/[.!?]+$/, '').trim();
 const KIND_LABEL = { homepage: 'Homepage', pricing: 'Pricing page', about: 'About page', features: 'Features page' };
+const REACH_NOUN = {
+  hackernews: 'story',
+  reddit: 'result',
+  youtube: 'video',
+  appstore: 'listing',
+  playstore: 'listing',
+  hiring: 'role',
+};
+const formatCount = (count) => count.toLocaleString('en-US');
+
+/** The one sentence a reach item stands on, used by its claim and its report line. */
+function reachItemText(item) {
+  const said = [];
+  if (item.points !== undefined) said.push(`${item.points} points`);
+  if (item.comments !== undefined) said.push(`${item.comments} comments`);
+  // An exact count is a number; a rounded "1.2M views" stays the page's own words.
+  if (item.views !== undefined) said.push(`${formatCount(item.views)} views`);
+  else if (item.views_text) said.push(item.views_text);
+  if (item.rating !== undefined) said.push(`rated ${item.rating}`);
+  if (item.rating_count !== undefined) said.push(`${formatCount(item.rating_count)} ratings`);
+
+  const parts = [quoted(item.title)];
+  if (item.subreddit) parts.push(`in r/${item.subreddit}`);
+  if (item.channel) parts.push(`by ${item.channel}`);
+  if (item.author) parts.push(`by ${item.author}`);
+  if (item.source === 'hiring') parts.push("is open on the app's careers page");
+  const counts = said.length ? ` (${said.join(', ')})` : '';
+  const dated = item.date ? ` dated ${item.date}` : '';
+  return `${parts.join(' ')}${counts}${dated}`;
+}
 
 function seenClaim(page, id) {
   const label = KIND_LABEL[page.kind] ?? page.kind;
@@ -112,29 +142,17 @@ function timelineClaim(timeline, id, seenIds) {
   );
 }
 
-/** One Seen claim per community item: the counts and date the answer gave. */
+/** One Seen claim per community, listing or role item: what the answer stated. */
 function reachItemClaim(item, id) {
   const label = REACH_LABEL[item.source] ?? item.source;
-  const noun = item.source === 'hackernews' ? 'story' : 'result';
-  const where = item.subreddit ? ` in r/${item.subreddit}` : '';
-  const counts = [];
-  if (item.points !== undefined) counts.push(`${item.points} points`);
-  if (item.comments !== undefined) counts.push(`${item.comments} comments`);
-  const said = counts.length ? ` (${counts.join(', ')})` : '';
-  const by = item.author ? ` by ${item.author}` : '';
-  const dated = item.date ? ` dated ${item.date}` : '';
-  const evidence = { url: item.url, quote: item.quote, fetched_at: item.fetched_at };
+  const noun = REACH_NOUN[item.source] ?? 'result';
+  const evidence = { url: item.url ?? item.listing_url, quote: item.quote, fetched_at: item.fetched_at };
   // The HN discussion page is where the counts live; the story link is the item itself.
   if (item.discussion_url) {
     evidence.url = item.discussion_url;
     evidence.page_url = item.url;
   }
-  return makeClaim({
-    id,
-    claim: `${label} ${noun} ${quoted(item.title)}${where}${said}${by}${dated}.`,
-    label: SEEN,
-    evidence: [evidence],
-  });
+  return makeClaim({ id, claim: `${label} ${noun} ${reachItemText(item)}.`, label: SEEN, evidence: [evidence] });
 }
 
 /** Exact counts, never a rounded guess: how many items, and on which channel. */
@@ -323,12 +341,7 @@ export function renderMarkdown({ run, claims, costs }) {
       lines.push(`- ${why}, no claim made.`);
     }
     for (const item of own) {
-      const counts = [];
-      if (item.points !== undefined) counts.push(`${item.points} points`);
-      if (item.comments !== undefined) counts.push(`${item.comments} comments`);
-      const said = counts.length ? ` — ${counts.join(', ')}` : '';
-      const where = item.subreddit ? ` in r/${item.subreddit}` : '';
-      lines.push(`- **${item.date ?? 'undated'}** "${item.title}"${where}${said} — <${item.url}>`);
+      lines.push(`- ${reachItemText(item)} — <${item.url ?? item.listing_url}>`);
       if (item.discussion_url) lines.push(`  discussion: <${item.discussion_url}>`);
     }
     lines.push('');
