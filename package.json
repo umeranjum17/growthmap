@@ -8,5 +8,13 @@
   },
   "bin": {
     "growthmap": "./bin/growthmap.js"
-  }
+  },
+  "files": [
+    "README.md",
+    "bin/",
+    "src/",
+    "docs/",
+    "skills/",
+    "LICENSE"
+  ]
 }

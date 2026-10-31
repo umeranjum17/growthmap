@@ -10,9 +10,9 @@ Every run prints what each data call cost and the total at the end. The base run
 
 Live page: <https://umeranjum17.github.io/growthmap/>
 
-## Status: slice 4a, the playbook and two real example runs
+## Status: slices 1 to 4c, the tool, the playbook and the live landing page
 
-Two commands run today. `growthmap run` reads the target app's own public pages, dates each of them from the public web archive and from the pages `/sitemap.xml` advertises, searches Hacker News, Reddit and YouTube for the app, reads its App Store and Google Play listings and the careers page on its own host, and writes a report where every line is either Seen, with a link the run fetched, or Inferred, with the Seen ids it stands on. `growthmap playbook` hands that report to your own agent and takes the plays back, refusing any play that cites evidence the run never saw. The landing page is slice 4b.
+Two commands run today. `growthmap run` reads the target app's own public pages, dates each of them from the public web archive and from the pages `/sitemap.xml` advertises, searches Hacker News, Reddit and YouTube for the app, reads its App Store and Google Play listings and the careers page on its own host, and writes a report where every line is either Seen, with a link the run fetched, or Inferred, with the Seen ids it stands on. `growthmap playbook` hands that report to your own agent and takes the plays back, refusing any play that cites evidence the run never saw.
 
 ## Usage
 
@@ -51,7 +51,7 @@ The first command writes the brief: the app, the run date, every Seen record wit
 
 ## Built for people and for agents
 
-growthmap is a command line tool with plain text for a person and structured output for an agent, so the same run can be read by you and driven by your own assistant.
+growthmap is a command line tool with plain text for a person and structured output for an agent, so the same run can be read by you and driven by your own assistant. The skill an agent loads to drive it ships in this repository at `skills/growthmap-reverse`, and is published with the package.
 
 ## Bring your own AI
 
