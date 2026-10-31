@@ -9,6 +9,7 @@
 // only so the test can point this code at a local stub and stay offline.
 import { setTimeout as sleep } from 'node:timers/promises';
 import { decodeEntities, getText, htmlToText } from './site.js';
+import { today } from './today.js';
 import { REACH_LABEL } from './reach.js';
 
 const DEFAULT_YOUTUBE = 'https://www.youtube.com/results';
@@ -22,8 +23,6 @@ const GAP_MS = 400;
 // kept and the run stops reading at these caps instead of claiming everything.
 const MAX_VIDEOS = 10;
 const MAX_ROLES = 25;
-
-const today = () => new Date().toISOString().slice(0, 10);
 
 const hostOf = (url) => {
   try {

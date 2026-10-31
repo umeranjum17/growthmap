@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { makeClaim } from '../src/claim.js';
 import { hnUrl, redditUrl } from '../src/reach.js';
 import { acceptPlays, playbookPrompt, withPlaybook } from '../src/playbook.js';
+import { SOURCES } from '../src/registry.js';
 
 const run = promisify(execFile);
 const CLI = fileURLToPath(new URL('../bin/growthmap.js', import.meta.url));
@@ -386,6 +387,14 @@ test('growthmap run writes a labelled, costed report for a real site', async () 
       'one metered site call per page, the 404 included',
     );
     assert.ok(costs.lines.every((line) => line.source && line.call));
+
+    // The sources table is one list, and a real run proves it covers the meter:
+    // every source name this run emitted is a row in `growthmap sources`.
+    assert.deepEqual(
+      [...new Set(costs.lines.map((line) => line.source))].sort(),
+      SOURCES.map((source) => source.name).sort(),
+      'every source this run metered is in the sources table',
+    );
 
     // --- the new source: archive dates, the sitemap, and the timeline ---
 
@@ -931,4 +940,69 @@ test('the landing page is one self-contained file that loads nothing', async () 
     assert.ok(html.includes(`href="${href}"`), `${href} is linked`);
   }
   assert.doesNotMatch(html, /\u2014/, 'plain hyphen only, never an em dash');
+});
+
+test('sources, doctor and --as-of are the surface the plan names', async () => {
+  const cli = (args, options) => run(process.execPath, [CLI, ...args], options);
+
+  // sources: one row per source the run can read, its cost, whether it needs a key.
+  const { stdout: table } = await cli(['sources']);
+  const rows = table.trimEnd().split('\n').map((line) => line.split(/\s{2,}/).filter(Boolean));
+  assert.deepEqual(rows[0], ['source', 'cost', 'needs a key'], 'the table names its columns');
+  assert.deepEqual(rows.slice(1).map(([name]) => name), SOURCES.map((source) => source.name));
+  for (const [, cost, key] of rows.slice(1)) {
+    assert.equal(cost, '0.00', 'every source is free today');
+    assert.equal(key, 'no', 'no source needs a key');
+  }
+
+  // --help names every command and every flag the skill offers.
+  const { stdout: usage } = await cli(['--help']);
+  for (const line of [
+    'growthmap run <app-url-or-host> [--out <dir>] [--as-of YYYY-MM-DD]',
+    'growthmap playbook <report-dir> [--accept <plays.json>]',
+    'growthmap sources',
+    'growthmap doctor',
+  ]) {
+    assert.ok(usage.includes(line), `--help names: ${line}`);
+  }
+
+  await withFixtureSite(async (origin, archiveEndpoint, stub) => {
+    const options = {
+      env: {
+        ...process.env,
+        GROWTHMAP_ARCHIVE_URL: archiveEndpoint,
+        GROWTHMAP_HN_URL: stub.hnEndpoint,
+        GROWTHMAP_REDDIT_URL: stub.redditEndpoint,
+        GROWTHMAP_YOUTUBE_URL: stub.youtubeEndpoint,
+        GROWTHMAP_ITUNES_URL: stub.itunesEndpoint,
+        GROWTHMAP_PLAY_URL: stub.playEndpoint,
+        GROWTHMAP_PLAY_DETAILS_URL: stub.playDetailsEndpoint,
+      },
+    };
+
+    // --as-of pins the day every page and fact is recorded as read.
+    const dir = await mkdtemp(join(tmpdir(), 'growthmap-asof-'));
+    await cli(['run', origin, '--as-of', '2026-01-15', '--out', dir], options);
+    const report = JSON.parse(await readFile(join(dir, 'report.json'), 'utf8'));
+    assert.ok(report.run.pages.length > 0);
+    for (const page of report.run.pages) {
+      assert.equal(page.fetched_at, '2026-01-15', `${page.url} is dated the pinned day`);
+    }
+    const evidence = report.claims.flatMap((claim) => claim.evidence ?? []);
+    assert.ok(evidence.length > 0, 'the run recorded evidence');
+    for (const entry of evidence) {
+      assert.equal(entry.fetched_at, '2026-01-15', 'every fact is dated the pinned day');
+    }
+
+    // A malformed value is refused before any network call, and writes nothing.
+    for (const bad of ['nonsense', '2026-02-30']) {
+      const untouched = join(dir, 'never');
+      await assert.rejects(cli(['run', origin, '--as-of', bad, '--out', untouched], options), (error) => {
+        assert.equal(error.code, 2, `${bad} is refused with exit code 2`);
+        assert.match(error.stderr, new RegExp(`--as-of "${bad}" is not a date`));
+        return true;
+      });
+      await assert.rejects(readdir(untouched), 'the refused run wrote nothing');
+    }
+  });
 });

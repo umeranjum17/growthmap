@@ -6,6 +6,7 @@
 // stub and stay offline.
 import { setTimeout as sleep } from 'node:timers/promises';
 import { decodeEntities, getText } from './site.js';
+import { today } from './today.js';
 
 const DEFAULT_HN = 'https://hn.algolia.com/api/v1/search';
 // Reddit refuses its JSON search to a plain client (403); the Atom search answers.
@@ -203,7 +204,7 @@ export async function fetchReach(calls) {
     }
 
     costLines.push({ source, call, cost: 0, status: 'ok' });
-    const fetched_at = new Date().toISOString().slice(0, 10);
+    const fetched_at = today();
     for (const record of parsed) items.push({ ...record, fetched_at });
     records.push({ source, call, status: 'ok', items: parsed.length });
   }

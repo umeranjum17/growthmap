@@ -1,21 +1,28 @@
 #!/usr/bin/env node
 // growthmap: one command that reads an app's own public pages and reports
 // every line as Seen (with the link and quote) or Inferred (with cited ids).
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { fetchSite } from '../src/site.js';
+import { fetchSite, getText } from '../src/site.js';
 import { fetchSitemap } from '../src/sitemap.js';
 import { archiveDates } from '../src/archive.js';
 import { fetchReach, hnUrl, redditUrl } from '../src/reach.js';
 import { fetchExtraSources } from '../src/sources.js';
 import { buildReport, renderMarkdown } from '../src/report.js';
 import { acceptPlays, playbookPrompt, seenRecords, withPlaybook } from '../src/playbook.js';
+import { SOURCES } from '../src/registry.js';
+import { setAsOf } from '../src/today.js';
+
+const DEFAULT_OUT = 'growthmap-out';
 
 const USAGE = `growthmap — read an app's public pages, label every claim.
 
 Usage:
-  growthmap run <app-url-or-host> [--out <dir>]
+  growthmap run <app-url-or-host> [--out <dir>] [--as-of YYYY-MM-DD]
   growthmap playbook <report-dir> [--accept <plays.json>]
+  growthmap sources
+  growthmap doctor
+  growthmap --help
 
 Reads the homepage and /pricing, /about, /features when they answer.
 Dated each page from the public web archive, plus the pages /sitemap.xml advertises.
@@ -23,9 +30,71 @@ Searches Hacker News and Reddit for the app's own address, YouTube for its name,
 and reads the App Store and Google Play listings and the app's own careers page.
 Writes report.md, report.json and costs.json into <dir> (default: growthmap-out).
 
+--as-of pins the date the run records for the pages and facts it reads, instead
+of today's date.
+
 playbook writes playbook-prompt.md for your own agent to answer as plays.json;
 --accept checks that answer against the run's Seen records and writes it into
-report.md. A play that cites evidence this run never saw is refused.`;
+report.md. A play that cites evidence this run never saw is refused.
+
+sources lists every source a run can read, one row each: what it costs and
+whether it needs a key.
+
+doctor says what is missing on this machine before a run: Node 20 or newer, one
+public host answering, and whether the output directory can be written. It
+exits non-zero when something is missing.`;
+
+const DATE_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** A real calendar day in YYYY-MM-DD, not just that shape. */
+const isDate = (text) => DATE_SHAPE.test(text) && new Date(`${text}T00:00:00Z`).toISOString().slice(0, 10) === text;
+
+/** Every source, its price and whether it needs a key: one row each. */
+function sourcesCommand() {
+  const rows = [
+    ['source', 'cost', 'needs a key'],
+    ...SOURCES.map((source) => [source.name, source.cost.toFixed(2), source.needsKey ? 'yes' : 'no']),
+  ];
+  const width = rows[0].map((_, column) => Math.max(...rows.map((row) => row[column].length)));
+  for (const row of rows) {
+    console.log(row.map((cell, column) => (column === row.length - 1 ? cell : cell.padEnd(width[column] + 2))).join('').trimEnd());
+  }
+  return 0;
+}
+
+/** What is missing before a run: one plain line per check, non-zero if any is. */
+async function doctorCommand() {
+  const checks = [];
+
+  const major = Number(process.versions.node.split('.')[0]);
+  checks.push([
+    major >= 20,
+    major >= 20
+      ? `Node ${process.versions.node} is 20 or newer`
+      : `Node ${process.versions.node} is older than 20, growthmap needs 20 or newer`,
+  ]);
+
+  const answered = await getText('https://example.com', 'text/html');
+  const online = answered.status === 'ok' || Number(answered.http_status) > 0;
+  checks.push([
+    online,
+    online ? 'reached example.com over the network' : `could not reach example.com (${answered.status})`,
+  ]);
+
+  let writable = true;
+  try {
+    await mkdir(DEFAULT_OUT, { recursive: true });
+    const probe = join(DEFAULT_OUT, `.doctor-${process.pid}`);
+    await writeFile(probe, 'growthmap doctor\n', 'utf8');
+    await rm(probe);
+  } catch {
+    writable = false;
+  }
+  checks.push([writable, writable ? `${DEFAULT_OUT}/ can be written` : `${DEFAULT_OUT}/ cannot be written here`]);
+
+  for (const [passes, line] of checks) console.log(`${passes ? 'ok     ' : 'missing'}  ${line}`);
+  return checks.every(([passes]) => passes) ? 0 : 1;
+}
 
 function parsePlaybookArgs(rest) {
   let dir;
@@ -55,10 +124,15 @@ function parseArgs(argv) {
   const [command, ...rest] = argv;
   if (!command || ['--help', '-h', 'help'].includes(command)) return { help: true };
   if (command === 'playbook') return parsePlaybookArgs(rest);
+  if (command === 'sources' || command === 'doctor') {
+    if (rest.length > 0) return { error: `unexpected argument: ${rest[0]}` };
+    return { command };
+  }
   if (command !== 'run') return { error: `unknown command: ${command}` };
 
   let target;
-  let out = 'growthmap-out';
+  let out = DEFAULT_OUT;
+  let asOf;
   for (let i = 0; i < rest.length; i += 1) {
     const arg = rest[i];
     if (arg === '--out') {
@@ -68,6 +142,12 @@ function parseArgs(argv) {
     } else if (arg.startsWith('--out=')) {
       out = arg.slice('--out='.length);
       if (!out) return { error: '--out needs a directory' };
+    } else if (arg === '--as-of') {
+      asOf = rest[i + 1];
+      i += 1;
+      if (!asOf) return { error: '--as-of needs a date like 2026-01-15' };
+    } else if (arg.startsWith('--as-of=')) {
+      asOf = arg.slice('--as-of='.length);
     } else if (arg.startsWith('-')) {
       return { error: `unknown option: ${arg}` };
     } else if (target === undefined) {
@@ -77,7 +157,10 @@ function parseArgs(argv) {
     }
   }
   if (!target) return { error: 'missing <app-url-or-host>' };
-  return { command: 'run', target, out };
+  if (asOf !== undefined && !isDate(asOf)) {
+    return { error: `--as-of "${asOf}" is not a date; use YYYY-MM-DD, for example 2026-01-15` };
+  }
+  return { command: 'run', target, out, asOf };
 }
 
 async function readJson(path, what) {
@@ -169,12 +252,17 @@ async function main(argv) {
   }
 
   if (args.command === 'playbook') return playbookCommand(args);
+  if (args.command === 'sources') return sourcesCommand();
+  if (args.command === 'doctor') return doctorCommand();
 
   const url = toUrl(args.target);
   if (!url) {
     console.error(`growthmap: "${args.target}" is not a URL or host`);
     return 2;
   }
+
+  // Pinned before any fetch, so every page and fact the run records carries it.
+  if (args.asOf) setAsOf(args.asOf);
 
   const { version } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   const started_at = new Date().toISOString();

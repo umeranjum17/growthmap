@@ -3,6 +3,7 @@
 // can point the same code at a local stub and stay offline.
 import { setTimeout as sleep } from 'node:timers/promises';
 import { getText } from './site.js';
+import { today } from './today.js';
 
 const DEFAULT_CDX = 'https://web.archive.org/cdx/search/cdx';
 const ROW_CAP = 100;
@@ -77,7 +78,7 @@ export async function archiveDates(urls) {
   let stopped = null;
 
   for (const url of urls) {
-    const fetched_at = new Date().toISOString().slice(0, 10);
+    const fetched_at = today();
     const endpoint = cdxUrl(url);
     const call = `GET ${endpoint}`;
 
