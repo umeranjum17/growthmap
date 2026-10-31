@@ -8,7 +8,7 @@ import { fetchSitemap } from '../src/sitemap.js';
 import { archiveDates } from '../src/archive.js';
 import { fetchReach, hnUrl, redditUrl } from '../src/reach.js';
 import { fetchExtraSources } from '../src/sources.js';
-import { buildReport, renderMarkdown } from '../src/report.js';
+import { buildReport, refusedPages, renderMarkdown } from '../src/report.js';
 import { acceptPlays, playbookPrompt, seenRecords, withPlaybook } from '../src/playbook.js';
 import { SOURCES } from '../src/registry.js';
 import { setAsOf } from '../src/today.js';
@@ -269,10 +269,9 @@ async function main(argv) {
   const { pages, costLines } = await fetchSite(url.origin);
 
   const home = pages.find((page) => page.kind === 'homepage');
-  if (home?.status !== 'ok') {
-    console.error(`growthmap: could not read ${home?.url ?? url.href} (${home?.status ?? 'unknown'}); no report written.`);
-    return 1;
-  }
+  // A page that refused is a gap, not a dead end: the run carries on with every
+  // source, the report names the gap, and the exit code says it is partial.
+  const refused = refusedPages(pages);
 
   // The sitemap advertises more pages; dedupe against the pages already read so
   // no URL is asked for twice. Archive dates are asked last, page URLs first.
@@ -290,7 +289,7 @@ async function main(argv) {
   const hostLabel = appHost.split('.')[0];
   const brand = /^[a-z]{3,}$/i.test(hostLabel)
     ? hostLabel
-    : ((home.title ?? '').split(/[\s\u2013\u2014:|\u00b7-]+/).filter(Boolean)[0] || hostLabel);
+    : ((home?.title ?? '').split(/[\s\u2013\u2014:|\u00b7-]+/).filter(Boolean)[0] || hostLabel);
   const reach = await fetchReach([
     { source: 'hackernews', url: hnUrl(appHost), host: appHost, brand },
     { source: 'reddit', url: redditUrl(appHost), host: appHost, brand },
@@ -332,6 +331,12 @@ async function main(argv) {
   }
   console.log(`total\t${report.costs.total.toFixed(2)} USD`);
   console.log(`wrote ${join(args.out, 'report.md')}, report.json, costs.json`);
+  if (refused.length > 0) {
+    console.error(
+      `growthmap: ${refused.length} page(s) refused this run; the report names them and rests no claim on them.`,
+    );
+    return 1;
+  }
   return 0;
 }
 

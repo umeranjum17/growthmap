@@ -838,6 +838,81 @@ test('growthmap run writes a labelled, costed report for a real site', async () 
   });
 });
 
+test('a refused homepage still writes the report, names the gap, and exits non-zero', async () => {
+  // The homepage answers 403 to a plain fetch, the way lovable.dev does. The
+  // pricing page still answers, so the report must keep it and name the gap.
+  const server = createServer((request, response) => {
+    const { pathname } = new URL(request.url, 'http://127.0.0.1');
+    if (pathname === '/') {
+      response.writeHead(403, { 'content-type': 'text/html' });
+      response.end('<title>Forbidden</title><p>Forbidden</p>');
+      return;
+    }
+    if (pathname === '/pricing') {
+      response.writeHead(200, { 'content-type': 'text/html' });
+      response.end(
+        '<html><head><title>Acme pricing</title></head><body><p>Simple pricing for every team.</p><ul><li>$9 per seat each month</li></ul></body></html>',
+      );
+      return;
+    }
+    response.writeHead(404, { 'content-type': 'text/html' });
+    response.end('<title>Not found</title><p>Not found</p>');
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const out = await mkdtemp(join(tmpdir(), 'growthmap-blocked-'));
+    await assert.rejects(
+      run(process.execPath, [CLI, 'run', origin, '--out', out], {
+        env: {
+          ...process.env,
+          GROWTHMAP_ARCHIVE_URL: `${origin}/stub-cdx`,
+          GROWTHMAP_HN_URL: `${origin}/stub-hn`,
+          GROWTHMAP_REDDIT_URL: `${origin}/stub-reddit`,
+          GROWTHMAP_YOUTUBE_URL: `${origin}/stub-youtube`,
+          GROWTHMAP_ITUNES_URL: `${origin}/stub-itunes`,
+          GROWTHMAP_PLAY_URL: `${origin}/stub-play`,
+          GROWTHMAP_PLAY_DETAILS_URL: `${origin}/stub-play-details`,
+        },
+      }),
+      (error) => {
+        assert.equal(error.code, 1, 'a partial run exits non-zero');
+        assert.match(error.stderr, /page\(s\) refused this run/);
+        return true;
+      },
+      'the refused homepage is not a dead end',
+    );
+
+    // The report and the cost table are written anyway.
+    assert.deepEqual((await readdir(out)).sort(), ['costs.json', 'report.json', 'report.md']);
+    const markdown = await readFile(join(out, 'report.md'), 'utf8');
+    const report = JSON.parse(await readFile(join(out, 'report.json'), 'utf8'));
+    const costs = JSON.parse(await readFile(join(out, 'costs.json'), 'utf8'));
+
+    // The gap is stated plainly, before the claims, with the code it got.
+    assert.match(markdown, /## Not read/);
+    assert.ok(markdown.indexOf('## Not read') < markdown.indexOf('## Seen'), 'the gap is read before the claims');
+    assert.match(markdown, new RegExp(`- <${origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/> \\u2014 HTTP 403`));
+
+    // Nothing rests on the page that refused.
+    const seen = report.claims.filter((claim) => claim.label === 'seen');
+    assert.ok(
+      !seen.some((claim) => claim.evidence.some((entry) => entry.url === `${origin}/`)),
+      'no Seen claim cites the refused page',
+    );
+    assert.ok(
+      !report.claims.some((claim) => /Homepage/.test(claim.claim)),
+      'the refused homepage is never described as read',
+    );
+
+    // The page that did answer is kept, so the run is partial rather than empty.
+    assert.ok(seen.some((claim) => claim.claim.startsWith('Pricing page')), 'the answering page still becomes a Seen claim');
+    assert.ok(costs.lines.some((line) => line.call === `GET ${origin}/`), 'the refused call is still metered');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('the landing page is one self-contained file that loads nothing', async () => {
   const dir = fileURLToPath(new URL('../docs/', import.meta.url));
   assert.deepEqual((await readdir(dir)).sort(), ['index.html'], 'one file, nothing beside it');
