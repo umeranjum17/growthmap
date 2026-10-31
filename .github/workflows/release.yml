@@ -2,8 +2,11 @@ name: release
 
 # Publishes growthmap to npm with provenance, through npm trusted publishing (OIDC): no token is
 # stored anywhere. The trusted publisher must name this repository and this workflow file.
-# The first publish of the name cannot use OIDC (npm needs the package to exist first), so this
+# The first publish of the name cannot use OIDC (npm needs the package to exist first), so that
 # job skips green and points at docs/release.md until the owner publishes once by hand.
+#
+# The release job beside it needs no account at all: it attaches the packed tarball to a GitHub
+# release for this version, so the install command works for a stranger today.
 on:
   push:
     branches: [main]
@@ -19,6 +22,58 @@ permissions:
   id-token: write
 
 jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The npm job below keeps its own permissions; this job only needs to write a release.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      # The asset name is fixed so releases/latest/download/growthmap.tgz always installs the
+      # newest build. The release notes carry the install lines, verbatim, because a reader
+      # copies them; npm 12 refuses a remote tarball without --allow-remote=all.
+      - name: Attach the tarball to this version's GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTES: |
+            Install growthmap from this release. No account is needed.
+
+            ```sh
+            npm install -g --allow-remote=all https://github.com/umeranjum17/growthmap/releases/latest/download/growthmap.tgz
+            growthmap doctor
+            growthmap sources
+            growthmap run example.com --out report
+            ```
+
+            `--allow-remote=all` is required: npm 12 refuses to install a remote tarball URL
+            without it. growthmap has no dependencies, so no `--allow-scripts` is needed.
+        run: |
+          set -eu
+          tag="v$(node -p 'require("./package.json").version')"
+
+          # Idempotent: a release that already carries the asset is done, and this stays green.
+          if gh release view "$tag" --json assets --jq 'any(.assets[]; .name == "growthmap.tgz")' 2>/dev/null | grep -qx true; then
+            echo "$tag already carries growthmap.tgz; nothing to do"
+            exit 0
+          fi
+
+          npm pack
+          mv growthmap-*.tgz growthmap.tgz
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            # The release exists but is missing the asset: upload it, never clobber over one.
+            gh release upload "$tag" growthmap.tgz
+          else
+            gh release create "$tag" growthmap.tgz \
+              --target "$GITHUB_SHA" \
+              --title "growthmap $tag" \
+              --notes "$NOTES"
+          fi
+
   publish:
     runs-on: ubuntu-latest
     timeout-minutes: 15
