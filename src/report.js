@@ -3,6 +3,23 @@ import { makeClaim, SEEN, INFERRED } from './claim.js';
 import { archiveUrl, dateOf, recordedLine } from './archive.js';
 import { REACH_LABEL } from './reach.js';
 
+/**
+ * The pages the run asked for and did not get. A 404 is the site saying the page
+ * is not there, which is an absence rather than a refusal, so it is not listed.
+ */
+export const refusedPages = (pages) => pages.filter((page) => page.status !== 'ok' && page.status !== 'not_found');
+
+const REFUSAL_TEXT = {
+  not_html: 'the answer was not an HTML page',
+  no_text: 'the page carried no readable text',
+  timeout: 'the request timed out after 20 seconds',
+  error: 'the request failed',
+};
+
+/** What the run got instead of the page: its status code, or the failure. */
+const refusalText = (page) =>
+  page.http_status ? `HTTP ${page.http_status}` : (REFUSAL_TEXT[page.status] ?? page.status);
+
 const round = (value) => Number(value.toFixed(2));
 const quoted = (text) => `"${text}"`;
 const trimPunctuation = (text) => text.replace(/[.!?]+$/, '').trim();
@@ -201,7 +218,9 @@ export function buildReport(run) {
   }
 
   // One Seen claim per page the archive could date, oldest first in the timeline.
-  const pageByUrl = new Map(pages.map((page) => [page.url, page]));
+  // Only a page that answered can wear its kind in a date claim; a refused page
+  // is never labelled "Homepage" as if this run had read it.
+  const pageByUrl = new Map(pages.filter((page) => page.status === 'ok').map((page) => [page.url, page]));
   const timeline = [];
   for (const entry of run.archive?.dated ?? []) {
     const page = pageByUrl.get(entry.url);
@@ -289,11 +308,27 @@ export function renderMarkdown({ run, claims, costs }) {
     '',
     `Run at ${run.finished_at} against ${run.target}.`,
     '',
-    '## Seen',
-    '',
   ];
 
-  for (const claim of claims.filter((c) => c.label === SEEN)) {
+  // A refused page is a gap, not a claim: state it before the claims, so a
+  // partial run can never read as a complete one.
+  const refused = refusedPages(run.pages);
+  if (refused.length > 0) {
+    lines.push(
+      '## Not read',
+      '',
+      'Asked for and not read this run. These are neither Seen nor Inferred, and no claim in this report rests on them.',
+      '',
+    );
+    for (const page of refused) lines.push(`- <${page.url}> \u2014 ${refusalText(page)}`);
+    lines.push('');
+  }
+
+  lines.push('## Seen', '');
+  const seen = claims.filter((c) => c.label === SEEN);
+  if (seen.length === 0) lines.push('- None this run.');
+
+  for (const claim of seen) {
     lines.push(`- **${claim.id}** ${claim.claim}`);
     for (const entry of claim.evidence) {
       lines.push(`  > ${entry.quote}`);

@@ -65,7 +65,10 @@ growthmap doctor
    `<dir>`, default `growthmap-out`, and prints the cost table and its total.
    `--as-of` pins the date the run records for the pages and facts it reads
    instead of today's date; a malformed value is refused before any fetch.
-   Read `report.md` before writing anything: the Seen section carries the ids
+   A page that refuses a plain fetch does not end the run: the run keeps every
+   page that did answer, lists each page that refused and why under
+   `## Not read`, writes that report anyway, and exits non-zero. Read
+   `report.md` before writing anything: the Seen section carries the ids
    (`s1`, `s2`, ...), the quote, the link and the fetch date.
 
 2. **Write the brief for yourself.**
@@ -114,15 +117,18 @@ growthmap doctor
 - **No model call.** growthmap calls no model and needs no key. Steps 1, 2 and 4
   are fetch and check. The playbook exists only because you or the reader's own
   agent wrote it.
-- **No fetch through a block.** If a site refuses a plain fetch, the run stops:
-  it prints that it could not read the page and writes no report at all. There is
-  no retry, no partial report and no fallback source. Say that plainly to the user
-  and do not describe channels the run did not collect.
+- **No fetch through a block.** growthmap never retries a refusal and has no
+  fallback source. If a site refuses a plain fetch, the run keeps every page that
+  answered, names each page that refused and why in the report's `## Not read`
+  section, writes that report anyway, and exits non-zero. Read that section
+  before you write a word: tell the user which pages were refused, and never
+  describe those pages, or anything the run did not read, as coverage.
 
 ## Pitfalls
 
 - Do not describe a blocked or empty source as coverage. A source that found
-  nothing says so in the report and makes no claim.
+  nothing says so in the report and makes no claim, and a page in `## Not read`
+  was not read: no claim, count or date in the report stands on it.
 - Do not restate an Inferred line as a fact from the site. Open its `from:` ids
   and keep the judgement visible.
 - Do not hand-edit `report.md` outside the `## Playbook` section; rerunning
@@ -135,5 +141,7 @@ growthmap doctor
 - `node bin/growthmap.js --help` prints every command and flag above, and the
   commands you used are the ones it prints.
 - `report.md` holds a `## Cost` table and a `**Total: ... USD**` line.
+- When the run exits non-zero, `report.md` names every refused page and its
+  status under `## Not read`, and no Seen claim cites one of them.
 - After `--accept`, `report.md` ends with `## Playbook`, and every id after each
   play's `*Seen:*` is a `"label": "seen"` claim id in `report.json`.
