@@ -16,7 +16,14 @@ Four commands run today. `growthmap run` reads the target app's own public pages
 
 ## Usage
 
-Run it straight from the repository with Node 20 or newer, no install step:
+Install it with npm, on Node 20 or newer:
+
+```sh
+npx growthmap sources                          # run it without installing anything
+npm install -g growthmap                       # or install the growthmap command
+```
+
+Or run it straight from the repository with Node 20 or newer, no install step:
 
 ```sh
 node bin/growthmap.js doctor                            # what is missing before a run

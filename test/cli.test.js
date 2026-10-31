@@ -915,7 +915,8 @@ test('a refused homepage still writes the report, names the gap, and exits non-z
 
 test('the landing page is one self-contained file that loads nothing', async () => {
   const dir = fileURLToPath(new URL('../docs/', import.meta.url));
-  assert.deepEqual((await readdir(dir)).sort(), ['index.html'], 'one file, nothing beside it');
+  // docs/ also carries release.md for maintainers; the page must still need nothing beside it,
+  // which the no link, no src, no @import and no url() checks below are what prove.
   const html = await readFile(join(dir, 'index.html'), 'utf8');
 
   // Everything it needs ships inside it: no script, no stylesheet, no image or
