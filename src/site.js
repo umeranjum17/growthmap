@@ -3,6 +3,7 @@
 // sitemap sources so the politeness rules live in one place.
 
 import { gunzipSync } from 'node:zlib';
+import { today } from './today.js';
 
 const USER_AGENT = 'growthmap/0.1 (public pages reader; growthmap report tool)';
 const TIMEOUT_MS = 20_000;
@@ -123,8 +124,6 @@ export function pickProseQuote(text) {
     .filter(usable);
   return sentences.find((sentence) => /[.!?]$/.test(sentence)) ?? sentences[0] ?? '';
 }
-
-const today = () => new Date().toISOString().slice(0, 10);
 
 async function fetchPage(url) {
   const fetched_at = today();

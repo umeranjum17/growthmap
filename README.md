@@ -12,15 +12,20 @@ Live page: <https://umeranjum17.github.io/growthmap/>
 
 ## Status: slices 1 to 4c, the tool, the playbook and the live landing page
 
-Two commands run today. `growthmap run` reads the target app's own public pages, dates each of them from the public web archive and from the pages `/sitemap.xml` advertises, searches Hacker News, Reddit and YouTube for the app, reads its App Store and Google Play listings and the careers page on its own host, and writes a report where every line is either Seen, with a link the run fetched, or Inferred, with the Seen ids it stands on. `growthmap playbook` hands that report to your own agent and takes the plays back, refusing any play that cites evidence the run never saw.
+Four commands run today. `growthmap run` reads the target app's own public pages, dates each of them from the public web archive and from the pages `/sitemap.xml` advertises, searches Hacker News, Reddit and YouTube for the app, reads its App Store and Google Play listings and the careers page on its own host, and writes a report where every line is either Seen, with a link the run fetched, or Inferred, with the Seen ids it stands on. `growthmap playbook` hands that report to your own agent and takes the plays back, refusing any play that cites evidence the run never saw. `growthmap sources` prints every source a run can read, what a call costs and whether it needs a key, so the price is known before the first run. `growthmap doctor` says what is missing on this machine before you start, and exits non-zero when something is.
 
 ## Usage
 
 Run it straight from the repository with Node 20 or newer, no install step:
 
 ```sh
+node bin/growthmap.js doctor                            # what is missing before a run
+node bin/growthmap.js sources                           # every source, its cost, whether it needs a key
 node bin/growthmap.js run example.com --out report
+node bin/growthmap.js run example.com --out report --as-of 2026-01-15
 ```
+
+`--as-of` pins the date the run records for the pages and facts it reads, instead of today's date.
 
 It writes `report.md` (the human report), `report.json` (the same claims as records, plus the run metadata) and `costs.json` (every call and the total) into the directory.
 

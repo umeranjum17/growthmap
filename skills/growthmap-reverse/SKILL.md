@@ -30,14 +30,31 @@ Node 20 or newer. From a checkout, run `node bin/growthmap.js <args>`; installed
 the same args go to the `growthmap` binary. Every command below exists today:
 
 ```sh
-growthmap run <app-url-or-host> [--out <dir>]
+growthmap run <app-url-or-host> [--out <dir>] [--as-of YYYY-MM-DD]
 growthmap playbook <report-dir> [--accept <plays.json>]
+growthmap sources
+growthmap doctor
 ```
+
+0. **Answer the two questions a reader asks first, before the first run.**
+
+   ```sh
+   node bin/growthmap.js sources   # every source, what a call costs, whether it needs a key
+   node bin/growthmap.js doctor    # what is missing on this machine before a run
+   ```
+
+   `sources` prints one row per source the run can read, with its price and
+   whether it needs a key. Every source is free today, so you can say what the
+   run will cost before it spends anything. `doctor` prints one plain line per
+   check — Node 20 or newer, one public host answering, the output directory
+   writable — and exits non-zero when something is missing, so a stale Node or a
+   dead network arrives as a sentence instead of a stack trace. If `doctor`
+   fails, tell the user what it named and fix that before running.
 
 1. **Fetch the run.**
 
    ```sh
-   node bin/growthmap.js run <app-url-or-host> [--out <dir>]
+   node bin/growthmap.js run <app-url-or-host> [--out <dir>] [--as-of YYYY-MM-DD]
    ```
 
    It reads the homepage and `/pricing`, `/about`, `/features` when they answer,
@@ -46,6 +63,8 @@ growthmap playbook <report-dir> [--accept <plays.json>]
    YouTube for its name, and reads the App Store and Google Play listings and the
    app's careers page. It writes `report.md`, `report.json` and `costs.json` into
    `<dir>`, default `growthmap-out`, and prints the cost table and its total.
+   `--as-of` pins the date the run records for the pages and facts it reads
+   instead of today's date; a malformed value is refused before any fetch.
    Read `report.md` before writing anything: the Seen section carries the ids
    (`s1`, `s2`, ...), the quote, the link and the fetch date.
 
@@ -113,8 +132,8 @@ growthmap playbook <report-dir> [--accept <plays.json>]
 
 ## Verification
 
-- `node bin/growthmap.js --help` prints the two usage lines above, and the flags
-  you used are the ones it prints.
+- `node bin/growthmap.js --help` prints every command and flag above, and the
+  commands you used are the ones it prints.
 - `report.md` holds a `## Cost` table and a `**Total: ... USD**` line.
 - After `--accept`, `report.md` ends with `## Playbook`, and every id after each
   play's `*Seen:*` is a `"label": "seen"` claim id in `report.json`.
