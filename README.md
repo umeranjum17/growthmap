@@ -16,7 +16,16 @@ Four commands run today. `growthmap run` reads the target app's own public pages
 
 ## Usage
 
-Install it with npm, on Node 20 or newer:
+Install it straight from the GitHub release, on Node 20 or newer. No account is needed:
+
+```sh
+npm install -g --allow-remote=all https://github.com/umeranjum17/growthmap/releases/latest/download/growthmap.tgz
+growthmap doctor
+```
+
+`--allow-remote=all` is required: npm 12 refuses a remote tarball URL without it.
+
+Once it is on npm, and not before:
 
 ```sh
 npx growthmap sources                          # run it without installing anything
